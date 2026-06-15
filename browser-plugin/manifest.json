@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "NINK Work-Product Authenticator",
+  "version": "1.8.1",
+  "description": "Secures AI session work-products via localized encryption and L2 blockchain anchoring.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "alarms",
+    "downloads",
+    "tabCapture"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://gemini.google.com/*",
+    "https://claude.ai/*",
+    "https://grok.com/*",
+    "https://grok.x.ai/*",
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://perplexity.ai/*",
+    "https://copilot.microsoft.com/*",
+    "https://poe.com/*",
+    "https://meta.ai/*",
+    "https://chat.deepseek.com/*",
+    "https://chat.mistral.ai/*",
+    "https://you.com/*",
+    "https://pi.ai/*",
+    "https://character.ai/*",
+    "https://huggingface.co/*",
+    "https://*.infura.io/*",
+    "https://*.alchemy.com/*",
+    "https://api.nink.network/*",
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "src/background/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "src/popup/popup.html"
+  }
+}

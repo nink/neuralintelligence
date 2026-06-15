@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project NINK Proof Anchor</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="popup-shell">
+    <header class="popup-header">
+      <div class="header-row">
+        <h1>Project NINK Proof Anchor</h1>
+        <span id="dev-mode-badge" class="dev-badge" hidden>[Local Dev Mode]</span>
+      </div>
+      <p class="subtitle">Local encryption and L2 session anchoring</p>
+    </header>
+
+    <label class="dev-toggle">
+      <input id="dev-stub-toggle" type="checkbox" checked>
+      <span>Local test mode (skip api.nink.network — no on-chain calls)</span>
+    </label>
+
+    <section class="metrics-card" aria-live="polite">
+      <div class="metric-row">
+        <span class="metric-label">Balance</span>
+        <span class="metric-value"><span id="balance-display">0.0000</span> NINK</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Cost Per Action</span>
+        <span class="metric-value"><span id="fee-display">0.0000</span> NINK</span>
+      </div>
+    </section>
+
+    <button id="sign-off-btn" type="button">Press NINK to Sign-Off</button>
+    <div id="status-console" class="status-console" role="status"></div>
+  </main>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

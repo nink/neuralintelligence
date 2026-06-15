@@ -1,0 +1,10 @@
+Target Environment: Chrome Manifest V3, WebCrypto API, Ethers.js v6 (or native fetch to JSON-RPC endpoints).
+Security Rules:
+- ZERO raw user chat or prompt data must leave the local browser extension unencrypted.
+- Avoid deprecated Manifest V2 architectures (e.g., background pages; use service workers instead).
+- Maintain rigorous handling of floating-point/fractional precision for custom token logic.
+
+Local Dev:
+- Default `useDevStubs: true` via popup checkbox — skips all api.nink.network calls.
+- Unchecked: production API first, fallback to local stubs on network failure.
+- Fallback uses 18-decimal wei strings: 100 NINK balance, 0.0005 NINK fee.

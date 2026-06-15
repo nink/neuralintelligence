@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NINK Session Viewer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e8eef7;
+      --muted: #8fa3bf;
+      --accent: #4f8cff;
+      --accent-hover: #6ba0ff;
+      --user-bg: rgba(79, 140, 255, 0.14);
+      --assistant-bg: rgba(255, 255, 255, 0.04);
+      --danger: #ff6b6b;
+      --warning-bg: rgba(234, 179, 8, 0.14);
+      --warning-border: rgba(234, 179, 8, 0.5);
+      --warning-text: #fde68a;
+      --warning-title: #fef3c7;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: linear-gradient(180deg, #111722 0%, var(--bg) 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .page {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.6rem;
+      font-weight: 650;
+    }
+
+    header p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .dropzone {
+      margin-top: 24px;
+      padding: 36px 24px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.02);
+      text-align: center;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(79, 140, 255, 0.08);
+    }
+
+    .dropzone strong {
+      display: block;
+      font-size: 1rem;
+      margin-bottom: 6px;
+    }
+
+    .dropzone span {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .panel {
+      margin-top: 24px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 1rem;
+      font-weight: 650;
+    }
+
+    .meta-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .meta-row {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .meta-label {
+      color: var(--muted);
+      font-size: 0.82rem;
+      padding-top: 2px;
+    }
+
+    .meta-value {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.78rem;
+      word-break: break-all;
+      line-height: 1.45;
+    }
+
+    #decrypt-btn {
+      margin-top: 12px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    #decrypt-btn:hover { background: var(--accent-hover); }
+
+    .key-status {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+      min-height: 1.2em;
+    }
+
+    .key-status.success {
+      color: #8fd694;
+    }
+
+    .error-banner {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 107, 107, 0.45);
+      background: rgba(255, 107, 107, 0.12);
+      color: #ffb4b4;
+      font-size: 0.86rem;
+    }
+
+    .chat-log {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .chat-meta {
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .session-context-panel {
+      margin: 12px 0 16px;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .session-context-panel h3 {
+      margin: 0 0 10px;
+      font-size: 0.88rem;
+      font-weight: 650;
+      color: var(--text);
+    }
+
+    .context-chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .context-chip {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(79, 140, 255, 0.12);
+      color: #b9d4ff;
+      font-size: 0.72rem;
+    }
+
+    .audit-summary {
+      margin: 0 0 12px;
+      padding: 12px 14px;
+      border-left: 3px solid var(--accent);
+      background: rgba(79, 140, 255, 0.08);
+      color: var(--text);
+      font-size: 0.88rem;
+      line-height: 1.55;
+    }
+
+    .audit-timeline {
+      margin: 0;
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .audit-timeline li {
+      color: var(--text);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    .audit-timeline li.audit-unexposed {
+      color: var(--warning-text);
+    }
+
+    .audit-timeline-type {
+      display: inline-block;
+      min-width: 118px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .audit-unexposed-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--warning-text);
+      font-size: 0.84rem;
+      line-height: 1.5;
+    }
+
+    .message {
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .message.user {
+      background: var(--user-bg);
+      border-color: rgba(79, 140, 255, 0.25);
+    }
+
+    .message.assistant {
+      background: var(--assistant-bg);
+    }
+
+    .message-role {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .message-text {
+      white-space: pre-wrap;
+      line-height: 1.55;
+      font-size: 0.92rem;
+    }
+
+    .message-images {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message-images.user {
+      align-items: flex-start;
+    }
+
+    .message-images.assistant {
+      align-items: flex-start;
+    }
+
+    .inline-image {
+      margin: 0;
+      max-width: 100%;
+    }
+
+    .inline-image img {
+      display: block;
+      width: 100%;
+      max-width: 640px;
+      height: auto;
+      max-height: min(75vh, 960px);
+      object-fit: contain;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .inline-video {
+      margin: 0;
+      max-width: 100%;
+    }
+
+    .inline-video-player {
+      display: block;
+      width: 100%;
+      max-width: 640px;
+      border-radius: 10px;
+      background: #000;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .attachment-placeholder {
+      max-width: 640px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--warning-border);
+      background: var(--warning-bg);
+      color: var(--warning-text);
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    .attachment-placeholder strong,
+    .attachment-warning-name {
+      display: block;
+      color: var(--warning-title);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .attachment-warning-note {
+      display: block;
+      color: var(--warning-text);
+      font-size: 0.88rem;
+    }
+
+    .inline-document {
+      margin: 0;
+      max-width: 100%;
+    }
+
+    .document-caption {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .document-preview-frame {
+      display: block;
+      width: 100%;
+      max-width: 640px;
+      height: min(70vh, 520px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .document-text-preview {
+      max-width: 640px;
+      max-height: min(50vh, 420px);
+      overflow: auto;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    .document-download-link {
+      display: inline-block;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .document-download-link:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .session-video {
+      margin-top: 4px;
+    }
+
+    .session-video-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .session-video-player {
+      display: block;
+      width: 100%;
+      max-width: 640px;
+      border-radius: 10px;
+      background: #000;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .hidden { display: none; }
+
+    @media (max-width: 640px) {
+      .meta-row { grid-template-columns: 1fr; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>NINK Session Viewer</h1>
+      <p>Drop a signed <code>.nink</code> session and its matching <code>.ninkkey</code> to decrypt locally.</p>
+    </header>
+
+    <div id="dropzone" class="dropzone">
+      <strong>Drop session files here</strong>
+      <span>Click to attach, or drag both <code>.nink</code> and <code>.ninkkey</code> together</span>
+      <input id="file-input" type="file" accept=".nink,.ninkkey,application/octet-stream" multiple hidden>
+    </div>
+
+    <div id="error-banner" class="error-banner hidden" role="alert"></div>
+
+    <section id="metadata-panel" class="panel hidden">
+      <h2>Session Metadata</h2>
+      <div class="meta-grid">
+        <div class="meta-row">
+          <div class="meta-label">Version</div>
+          <div id="meta-version" class="meta-value">—</div>
+        </div>
+        <div class="meta-row">
+          <div class="meta-label">Blockchain Network</div>
+          <div id="meta-network" class="meta-value">—</div>
+        </div>
+        <div class="meta-row">
+          <div class="meta-label">Transaction Hash</div>
+          <div id="meta-tx" class="meta-value">—</div>
+        </div>
+        <div class="meta-row">
+          <div class="meta-label">State Hash</div>
+          <div id="meta-state" class="meta-value">—</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="decrypt-panel" class="panel hidden">
+      <h2>Decrypt Conversation</h2>
+      <p id="key-status" class="key-status">Attach both session files above to decrypt automatically.</p>
+      <button id="decrypt-btn" type="button" hidden>Retry Decrypt</button>
+    </section>
+
+    <section id="chat-panel" class="panel hidden">
+      <h2>Conversation</h2>
+      <div id="chat-meta" class="chat-meta"></div>
+      <div id="session-context-panel" class="session-context-panel hidden">
+        <h3>Human–AI session context</h3>
+        <div id="audit-summary" class="audit-summary hidden"></div>
+        <div id="session-context-grid" class="meta-grid"></div>
+      </div>
+      <div id="audit-unexposed-panel" class="session-context-panel hidden">
+        <h3>Files not exposed at sign-off</h3>
+        <ul id="audit-unexposed-list" class="audit-unexposed-list"></ul>
+      </div>
+      <div id="audit-timeline-panel" class="session-context-panel hidden">
+        <h3>Interaction timeline</h3>
+        <ol id="audit-timeline" class="audit-timeline"></ol>
+      </div>
+      <div id="chat-log" class="chat-log"></div>
+    </section>
+  </div>
+
+  <script>
+    const IV_LENGTH = 12;
+
+    let loadedSession = null;
+    let loadedNinkFileName = "";
+    let loadedSecretKey = "";
+    let loadedKeyMeta = null;
+    let pendingKey = null;
+
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("file-input");
+    const keyStatus = document.getElementById("key-status");
+    const decryptButton = document.getElementById("decrypt-btn");
+    const errorBanner = document.getElementById("error-banner");
+    const metadataPanel = document.getElementById("metadata-panel");
+    const decryptPanel = document.getElementById("decrypt-panel");
+    const chatPanel = document.getElementById("chat-panel");
+
+    function getKeyFileName(ninkFileName) {
+      return String(ninkFileName || "").replace(/\.nink$/i, ".ninkkey");
+    }
+
+    function normalizeKeyText(text) {
+      return String(text || "").trim().replace(/\s+/g, "");
+    }
+
+    function isNinkArchiveName(name) {
+      return /\.nink$/i.test(String(name || ""));
+    }
+
+    function isNinkKeyName(name) {
+      return /\.ninkkey$/i.test(String(name || ""));
+    }
+
+    function setKeyStatus(message, isSuccess = false) {
+      keyStatus.textContent = message;
+      keyStatus.classList.toggle("success", isSuccess);
+    }
+
+    function keyMatchesNink(ninkFileName, keyFileName) {
+      const expected = getKeyFileName(ninkFileName).toLowerCase();
+      const keyLower = String(keyFileName || "").toLowerCase();
+      if (keyLower === expected) {
+        return true;
+      }
+
+      const stem = String(ninkFileName || "").replace(/\.nink$/i, "").toLowerCase();
+      return keyLower === `${stem}.ninkkey` || keyLower.startsWith(`${stem}.`);
+    }
+
+    function applyPendingKey(sourceLabel, autoDecrypt = true) {
+      if (!pendingKey?.keyText) {
+        return false;
+      }
+
+      const parsed = parseKeyFileText(pendingKey.keyText);
+      if (!parsed.key) {
+        return false;
+      }
+
+      loadedSecretKey = parsed.key;
+      loadedKeyMeta = parsed.meta ?? pendingKey.meta ?? null;
+      decryptButton.hidden = !loadedSecretKey;
+
+      if (sourceLabel) {
+        setKeyStatus(sourceLabel, true);
+      }
+
+      if (autoDecrypt && loadedSecretKey && loadedSession?.encryptedPayload) {
+        handleDecrypt();
+      }
+
+      return true;
+    }
+
+    function resetConversationView() {
+      loadedSecretKey = "";
+      loadedKeyMeta = null;
+      decryptButton.hidden = true;
+      chatPanel.classList.add("hidden");
+      document.getElementById("chat-log").innerHTML = "";
+    }
+
+    function parseKeyFileText(text) {
+      const raw = String(text || "").trim();
+      if (!raw) {
+        return { key: "", meta: null };
+      }
+
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          const keyCandidate =
+            parsed.aesKeyBase64 || parsed.key || parsed.secretKey || parsed.aesKey;
+          if (keyCandidate) {
+            return {
+              key: normalizeKeyText(keyCandidate),
+              meta: parsed,
+            };
+          }
+        }
+      } catch (_error) {
+        // Plain-text .ninkkey files remain base64-only for now.
+      }
+
+      return { key: normalizeKeyText(raw), meta: null };
+    }
+
+    function pickCompanionKeyFile(ninkFileName, files) {
+      const expectedKeyName = getKeyFileName(ninkFileName).toLowerCase();
+      const list = Array.from(files || []);
+
+      const exactMatch = list.find(
+        (file) => String(file.name || "").toLowerCase() === expectedKeyName
+      );
+      if (exactMatch) {
+        return exactMatch;
+      }
+
+      return list.find((file) => isNinkKeyName(file.name)) || null;
+    }
+
+    function splitIncomingFiles(files) {
+      const list = Array.from(files || []);
+      const ninkFile =
+        list.find((file) => isNinkArchiveName(file.name)) ||
+        list.find((file) => /\.json$/i.test(String(file.name || ""))) ||
+        null;
+      const keyFile = ninkFile ? pickCompanionKeyFile(ninkFile.name, list) : null;
+      return { ninkFile, keyFile, allFiles: list };
+    }
+
+    async function stashKeyFromFile(file) {
+      const keyText = await file.text();
+      const parsed = parseKeyFileText(keyText);
+      if (!parsed.key) {
+        showError("Key file was empty.");
+        return false;
+      }
+
+      pendingKey = {
+        fileName: file.name,
+        keyText,
+        meta: parsed.meta,
+      };
+      return true;
+    }
+
+    async function attemptAutoLoadKey(ninkFileName, companionKeyFile) {
+      if (companionKeyFile) {
+        await stashKeyFromFile(companionKeyFile);
+      }
+
+      if (pendingKey?.keyText && keyMatchesNink(ninkFileName, pendingKey.fileName)) {
+        applyPendingKey(`Loaded ${pendingKey.fileName}`, true);
+        return true;
+      }
+
+      if (pendingKey?.keyText) {
+        pendingKey = null;
+      }
+
+      setKeyStatus(
+        `Loaded ${ninkFileName}. Drop the matching ${getKeyFileName(ninkFileName)} on the upload area above.`
+      );
+      return false;
+    }
+
+    async function loadKeyFromUserFile(file) {
+      if (!file) {
+        return;
+      }
+
+      if (!(await stashKeyFromFile(file))) {
+        return;
+      }
+
+      clearError();
+
+      if (loadedSession?.encryptedPayload) {
+        applyPendingKey(`Loaded ${file.name}`, true);
+        return;
+      }
+
+      setKeyStatus(`Loaded ${file.name}. Drop the matching .nink file above.`, true);
+    }
+
+    async function processIncomingFiles(files) {
+      const list = Array.from(files || []);
+      const { ninkFile, keyFile } = splitIncomingFiles(list);
+
+      if (!ninkFile) {
+        const keyOnly = list.find((file) => isNinkKeyName(file.name));
+        if (keyOnly) {
+          await loadKeyFromUserFile(keyOnly);
+          return;
+        }
+
+        showError("Attach a .nink archive (and matching .ninkkey if you have it).");
+        return;
+      }
+
+      clearError();
+      loadedNinkFileName = ninkFile.name;
+      const text = await ninkFile.text();
+      resetConversationView();
+
+      if (!loadSessionFromText(text)) {
+        loadedNinkFileName = "";
+        return;
+      }
+
+      await attemptAutoLoadKey(loadedNinkFileName, keyFile);
+    }
+
+    async function openArchivePicker() {
+      if (window.showOpenFilePicker) {
+        try {
+          const handles = await window.showOpenFilePicker({
+            multiple: true,
+            types: [
+              {
+                description: "NINK session files",
+                accept: {
+                  "application/octet-stream": [".nink", ".ninkkey"],
+                },
+              },
+            ],
+          });
+
+          const files = await Promise.all(
+            handles.map(async (handle) => handle.getFile())
+          );
+          await processIncomingFiles(files);
+          return;
+        } catch (error) {
+          if (error?.name === "AbortError") {
+            return;
+          }
+          showError(error.message || "Could not open session files.");
+          return;
+        }
+      }
+
+      fileInput.click();
+    }
+
+    function showError(message) {
+      errorBanner.textContent = message;
+      errorBanner.classList.remove("hidden");
+    }
+
+    function clearError() {
+      errorBanner.textContent = "";
+      errorBanner.classList.add("hidden");
+    }
+
+    function base64ToUint8Array(base64) {
+      const normalized = String(base64 || "").trim();
+      if (!normalized) {
+        throw new Error("Missing base64 input.");
+      }
+
+      const binary = atob(normalized);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+
+    function setMetadata(session) {
+      document.getElementById("meta-version").textContent = session.version || "—";
+      document.getElementById("meta-network").textContent = session.blockchainNetwork || "—";
+      document.getElementById("meta-tx").textContent = session.transactionHash || "—";
+      document.getElementById("meta-state").textContent = session.stateHash || "—";
+      metadataPanel.classList.remove("hidden");
+      decryptPanel.classList.remove("hidden");
+      chatPanel.classList.add("hidden");
+      document.getElementById("chat-log").innerHTML = "";
+    }
+
+    function loadSessionFromText(text) {
+      clearError();
+      let session;
+
+      try {
+        session = JSON.parse(text);
+      } catch (_error) {
+        showError("Invalid JSON file. Drop a valid NINK session export.");
+        return false;
+      }
+
+      if (!session || typeof session !== "object") {
+        showError("Session file is empty or malformed.");
+        return false;
+      }
+
+      if (!session.encryptedPayload) {
+        showError("Session file is missing encryptedPayload.");
+        return false;
+      }
+
+      loadedSession = session;
+      setMetadata(session);
+      return true;
+    }
+
+    async function handleDecrypt() {
+      clearError();
+
+      if (!loadedSession?.encryptedPayload) {
+        showError("Load a session file before decrypting.");
+        return;
+      }
+
+      if (!window.crypto?.subtle) {
+        showError(
+          "Web Crypto is unavailable. Open viewer.html via http://127.0.0.1 (not file://). " +
+          "Example: npx serve . from the nink-browser-plugin folder."
+        );
+        return;
+      }
+
+      if (!loadedSecretKey) {
+        showError(`Attach the matching ${getKeyFileName(loadedNinkFileName)} file above.`);
+        return;
+      }
+
+      try {
+        const sessionData = await decryptPayload(
+          loadedSession.encryptedPayload,
+          loadedSecretKey,
+          loadedSession.payloadCompression
+        );
+        renderConversation(sessionData);
+      } catch (error) {
+        showError(`Decryption failed: ${error.message}`);
+      }
+    }
+
+    async function importAesKey(base64Key) {
+      const keyBytes = base64ToUint8Array(base64Key);
+
+      if (keyBytes.length !== 32) {
+        throw new Error("AES key must be 32 bytes (base64-encoded raw key from the matching .ninkkey file).");
+      }
+
+      return crypto.subtle.importKey(
+        "raw",
+        keyBytes,
+        { name: "AES-GCM" },
+        false,
+        ["decrypt"]
+      );
+    }
+
+    async function gzipDecompress(bytes) {
+      if (typeof DecompressionStream === "undefined") {
+        throw new Error("DecompressionStream (gzip) is not available in this browser.");
+      }
+
+      const input = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      const stream = new Blob([input]).stream().pipeThrough(new DecompressionStream("gzip"));
+      return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+
+    async function decodeDecryptedPayload(decryptedBytes, payloadCompression) {
+      let jsonBytes = decryptedBytes;
+
+      if (payloadCompression === "gzip") {
+        jsonBytes = await gzipDecompress(decryptedBytes);
+      } else {
+        try {
+          jsonBytes = await gzipDecompress(decryptedBytes);
+        } catch (_error) {
+          jsonBytes = decryptedBytes;
+        }
+      }
+
+      const parsed = JSON.parse(new TextDecoder().decode(jsonBytes));
+
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Decrypted payload was not a valid session object.");
+      }
+
+      return parsed;
+    }
+
+    async function decryptPayload(encryptedPayloadBase64, base64Key, payloadCompression) {
+      const encryptedBytes = base64ToUint8Array(encryptedPayloadBase64);
+
+      if (encryptedBytes.length <= IV_LENGTH) {
+        throw new Error("Encrypted payload is too short to contain IV + ciphertext.");
+      }
+
+      const iv = encryptedBytes.slice(0, IV_LENGTH);
+      const ciphertext = encryptedBytes.slice(IV_LENGTH);
+      const cryptoKey = await importAesKey(base64Key);
+
+      const decryptedBuffer = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        cryptoKey,
+        ciphertext
+      );
+
+      return decodeDecryptedPayload(new Uint8Array(decryptedBuffer), payloadCompression);
+    }
+
+    function normalizeRole(role) {
+      const value = String(role || "").toLowerCase();
+      if (value === "user" || value === "human") {
+        return "user";
+      }
+      return "assistant";
+    }
+
+    function normalizeImageSrc(base64Value) {
+      const value = String(base64Value || "").trim();
+      if (!value) {
+        return "";
+      }
+      if (value.startsWith("data:")) {
+        return value;
+      }
+      return `data:image/png;base64,${value}`;
+    }
+
+    function documentFilenamesOverlap(left, right) {
+      const normalize = (value) =>
+        String(value || "")
+          .trim()
+          .split(/[/\\]/)
+          .pop()
+          .toLowerCase();
+      const leftName = normalize(left);
+      const rightName = normalize(right);
+
+      if (!leftName || !rightName) {
+        return false;
+      }
+
+      if (leftName === rightName) {
+        return true;
+      }
+
+      return leftName.endsWith(rightName) || rightName.endsWith(leftName);
+    }
+
+    function collapseEquivalentDocuments(documents) {
+      const grouped = new Map();
+
+      for (const document of documents) {
+        const anchor = Number(document?.afterMessageIndex) || 0;
+        if (!grouped.has(anchor)) {
+          grouped.set(anchor, []);
+        }
+        grouped.get(anchor).push(document);
+      }
+
+      const collapsed = [];
+      for (const list of grouped.values()) {
+        const sorted = [...list].sort(
+          (left, right) =>
+            String(right.filename || right.label || "").length -
+            String(left.filename || left.label || "").length
+        );
+        const kept = [];
+
+        for (const candidate of sorted) {
+          const candidateName = candidate.filename || candidate.label || "";
+          const isShadow = kept.some((existing) =>
+            documentFilenamesOverlap(
+              existing.filename || existing.label,
+              candidateName
+            )
+          );
+
+          if (!isShadow) {
+            kept.push(candidate);
+          }
+        }
+
+        collapsed.push(...kept);
+      }
+
+      return collapsed;
+    }
+
+    function normalizeAttachmentFilename(value) {
+      return String(value || "")
+        .trim()
+        .split(/[/\\]/)
+        .pop()
+        .toLowerCase();
+    }
+
+    function dedupeMetadataOnlyByFilename(mediaItems) {
+      const seenFilenames = new Set();
+
+      return mediaItems.filter((item) => {
+        if (item?.captureStatus !== "metadata-only") {
+          return true;
+        }
+
+        const filename = normalizeAttachmentFilename(item.filename || item.label);
+        if (!filename) {
+          return true;
+        }
+
+        if (seenFilenames.has(filename)) {
+          return false;
+        }
+
+        seenFilenames.add(filename);
+        return true;
+      });
+    }
+
+    function mediaDedupeKey(item) {
+      const anchor = Number(item?.afterMessageIndex) || 0;
+      const filename = String(item?.filename || item?.label || "")
+        .trim()
+        .toLowerCase();
+
+      if (item?.captureStatus === "metadata-only" && filename) {
+        return `missing:${filename}`;
+      }
+
+      if (item?.relatedImageIndex) {
+        return `related-image:${item.relatedImageIndex}`;
+      }
+
+      if (isDocumentMediaItem(item) && filename) {
+        return `doc:${anchor}:${filename}`;
+      }
+
+      if (item?.captureKind === "video" || String(item?.mimeType || "").startsWith("video/")) {
+        return `video:${anchor}:${filename || item.index || item.sourceUrl || ""}`;
+      }
+
+      return `image:${anchor}:${item.index || ""}:${item.sourceUrl || item.alt || ""}`;
+    }
+
+    function buildMediaByMessageIndex(messages, mediaItems) {
+      const grouped = new Map();
+      const unanchored = [];
+      const seenKeys = new Set();
+
+      for (const item of mediaItems) {
+        if (item?.captureStatus !== "success" && item?.captureStatus !== "metadata-only") {
+          continue;
+        }
+
+        if (!item?.base64 && item?.captureStatus !== "metadata-only") {
+          continue;
+        }
+
+        const dedupeKey = mediaDedupeKey(item);
+        if (seenKeys.has(dedupeKey)) {
+          continue;
+        }
+        seenKeys.add(dedupeKey);
+
+        const anchor = Number(item.afterMessageIndex);
+        if (Number.isFinite(anchor) && anchor > 0) {
+          if (!grouped.has(anchor)) {
+            grouped.set(anchor, []);
+          }
+          grouped.get(anchor).push(item);
+        } else {
+          unanchored.push(item);
+        }
+      }
+
+      for (const list of grouped.values()) {
+        list.sort(
+          (left, right) =>
+            (left.documentOrder ?? left.index ?? 0) - (right.documentOrder ?? right.index ?? 0)
+        );
+      }
+
+      if (unanchored.length > 0) {
+        let queueIndex = 0;
+        for (const message of messages) {
+          if (queueIndex >= unanchored.length) {
+            break;
+          }
+          if (!grouped.has(message.index)) {
+            grouped.set(message.index, []);
+          }
+          grouped.get(message.index).push(unanchored[queueIndex]);
+          queueIndex += 1;
+        }
+
+        const lastMessage = messages[messages.length - 1];
+        while (queueIndex < unanchored.length && lastMessage) {
+          if (!grouped.has(lastMessage.index)) {
+            grouped.set(lastMessage.index, []);
+          }
+          grouped.get(lastMessage.index).push(unanchored[queueIndex]);
+          queueIndex += 1;
+        }
+      }
+
+      return grouped;
+    }
+
+    function appendInlineMedia(container, mediaItems, role) {
+      const wrap = document.createElement("div");
+      wrap.className = `message-images ${role}`;
+
+      mediaItems.forEach((item) => {
+        if (item.captureStatus === "metadata-only") {
+          const figure = document.createElement("figure");
+          figure.className = "attachment-placeholder attachment-warning";
+
+          const name = document.createElement("strong");
+          name.className = "attachment-warning-name";
+          name.textContent = attachmentPlaceholderLabel(item);
+
+          const note = document.createElement("span");
+          note.className = "attachment-warning-note";
+          note.textContent =
+            "Referenced in chat, but the file is not exposed in the page DOM at sign-off time.";
+
+          figure.appendChild(name);
+          figure.appendChild(note);
+          wrap.appendChild(figure);
+          return;
+        }
+
+        if (isDocumentMediaItem(item)) {
+          appendDocumentPreview(wrap, item);
+          return;
+        }
+
+        const mimeType = String(item.mimeType || "").toLowerCase();
+        const isVideo =
+          item.captureKind === "video" && mimeType.startsWith("video/");
+
+        if (isVideo) {
+          const figure = document.createElement("figure");
+          figure.className = "inline-video";
+
+          const video = document.createElement("video");
+          video.className = "inline-video-player";
+          video.controls = true;
+          video.playsInline = true;
+          video.preload = "metadata";
+          video.src = normalizeVideoSrc(item.base64, item.mimeType);
+
+          figure.appendChild(video);
+          wrap.appendChild(figure);
+          return;
+        }
+
+        const figure = document.createElement("figure");
+        figure.className = "inline-image";
+
+        const img = document.createElement("img");
+        img.src = normalizeImageSrc(item.base64);
+        img.alt = String(item.alt || "").trim() || "Session image";
+        img.loading = "lazy";
+
+        figure.appendChild(img);
+        wrap.appendChild(figure);
+      });
+
+      container.appendChild(wrap);
+    }
+
+    function appendMessageBubble(container, message, options = {}) {
+      const role = normalizeRole(message.role);
+      const text = String(message.text || "").trim();
+      const hasMedia = Boolean(options.hasMedia);
+
+      if (!text && !hasMedia) {
+        return;
+      }
+
+      const bubble = document.createElement("article");
+      bubble.className = `message ${role}`;
+
+      const roleLabel = document.createElement("div");
+      roleLabel.className = "message-role";
+      roleLabel.textContent = role === "user" ? "User" : "Assistant";
+
+      const body = document.createElement("div");
+      body.className = "message-text";
+      body.textContent = text || "(attachment)";
+
+      bubble.appendChild(roleLabel);
+      bubble.appendChild(body);
+      container.appendChild(bubble);
+    }
+
+    function normalizeVideoSrc(base64Value, mimeType) {
+      const value = String(base64Value || "").trim();
+      if (!value) {
+        return "";
+      }
+      if (value.startsWith("data:")) {
+        return value;
+      }
+      const mime = String(mimeType || "video/webm").trim() || "video/webm";
+      return `data:${mime};base64,${value}`;
+    }
+
+    function normalizeDocumentSrc(base64Value, mimeType) {
+      const value = String(base64Value || "").trim();
+      if (!value) {
+        return "";
+      }
+      if (value.startsWith("data:")) {
+        return value;
+      }
+      const mime = String(mimeType || "application/octet-stream").trim() || "application/octet-stream";
+      return `data:${mime};base64,${value}`;
+    }
+
+    function decodeDataUrlText(dataUrl, maxChars = 120000) {
+      const value = String(dataUrl || "").trim();
+      if (!value.startsWith("data:")) {
+        return "";
+      }
+
+      const comma = value.indexOf(",");
+      if (comma < 0) {
+        return "";
+      }
+
+      const meta = value.slice(0, comma);
+      const body = value.slice(comma + 1);
+      let text = "";
+
+      if (meta.includes(";base64")) {
+        const binary = atob(body);
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        text = new TextDecoder("utf-8").decode(bytes);
+      } else {
+        text = decodeURIComponent(body);
+      }
+
+      if (text.length > maxChars) {
+        return `${text.slice(0, maxChars)}\n\n[Preview truncated]`;
+      }
+
+      return text;
+    }
+
+    function isAudioMediaItem(item) {
+      const mime = String(item?.mimeType || "").toLowerCase();
+      const name = String(item?.filename || item?.label || "");
+      return (
+        mime.startsWith("audio/") ||
+        /\.(wav|wave|mp3|m4a|ogg|flac|aac|weba|aiff?|mid|midi)$/i.test(name)
+      );
+    }
+
+    function attachmentPlaceholderLabel(item) {
+      const name = String(item.filename || item.label || "").trim();
+      if (name) {
+        return name;
+      }
+      if (isDocumentMediaItem(item)) {
+        return "Document attachment";
+      }
+      if (isAudioMediaItem(item)) {
+        return "Audio attachment";
+      }
+      return "Video attachment";
+    }
+
+    function isDocumentMediaItem(item) {
+      const kind = String(item?.captureKind || "");
+      const mime = String(item?.mimeType || "").toLowerCase();
+      const name = String(item?.filename || item?.label || "");
+      return (
+        kind.includes("document") ||
+        mime === "application/pdf" ||
+        mime.startsWith("text/") ||
+        mime.startsWith("audio/") ||
+        mime === "application/json" ||
+        /\.(pdf|docx?|xlsx?|pptx?|txt|csv|json|md|markdown|rtf|odt|ods|zip|html?|xml|yaml|yml|wav|wave|mp3|m4a|ogg|flac|aac|weba|aiff?|mid|midi)$/i.test(
+          name
+        )
+      );
+    }
+
+    function appendDocumentPreview(wrap, item) {
+      const filename = String(item.filename || item.label || "document").trim() || "document";
+      const mimeType = String(item.mimeType || "").toLowerCase();
+      const src = normalizeDocumentSrc(item.base64, item.mimeType);
+      const figure = document.createElement("figure");
+      figure.className = "inline-document";
+
+      const caption = document.createElement("div");
+      caption.className = "document-caption";
+      caption.textContent = filename;
+      figure.appendChild(caption);
+
+      if (mimeType === "application/pdf" || /\.pdf$/i.test(filename)) {
+        const iframe = document.createElement("iframe");
+        iframe.className = "document-preview-frame";
+        iframe.src = src;
+        iframe.title = filename;
+        figure.appendChild(iframe);
+        wrap.appendChild(figure);
+        return;
+      }
+
+      if (
+        item.captureKind === "document-image-preview" ||
+        (mimeType.startsWith("image/") && src)
+      ) {
+        const img = document.createElement("img");
+        img.className = "document-image-preview";
+        img.src = src.startsWith("data:") ? src : normalizeImageSrc(src);
+        img.alt = filename;
+        img.loading = "lazy";
+        figure.appendChild(img);
+        wrap.appendChild(figure);
+        return;
+      }
+
+      const isTextLike =
+        mimeType.startsWith("text/") ||
+        mimeType === "application/json" ||
+        /\.(txt|csv|json|md|markdown|yaml|yml|xml|html?)$/i.test(filename);
+
+      if (isTextLike) {
+        const pre = document.createElement("pre");
+        pre.className = "document-text-preview";
+        pre.textContent = decodeDataUrlText(src) || "[Empty text document]";
+        figure.appendChild(pre);
+        wrap.appendChild(figure);
+        return;
+      }
+
+      const link = document.createElement("a");
+      link.className = "document-download-link";
+      link.href = src;
+      link.download = filename;
+      link.textContent = `Download ${filename}`;
+      figure.appendChild(link);
+      wrap.appendChild(figure);
+    }
+
+    function appendContextRow(container, label, value) {
+      if (value == null || value === "") {
+        return;
+      }
+
+      const row = document.createElement("div");
+      row.className = "meta-row";
+
+      const labelEl = document.createElement("div");
+      labelEl.className = "meta-label";
+      labelEl.textContent = label;
+
+      const valueEl = document.createElement("div");
+      valueEl.className = "meta-value";
+      valueEl.textContent = String(value);
+
+      row.appendChild(labelEl);
+      row.appendChild(valueEl);
+      container.appendChild(row);
+    }
+
+    function renderSessionContext(sessionData) {
+      const panel = document.getElementById("session-context-panel");
+      const grid = document.getElementById("session-context-grid");
+      const summaryEl = document.getElementById("audit-summary");
+      const unexposedPanel = document.getElementById("audit-unexposed-panel");
+      const unexposedList = document.getElementById("audit-unexposed-list");
+      const timelinePanel = document.getElementById("audit-timeline-panel");
+      const timelineEl = document.getElementById("audit-timeline");
+
+      grid.innerHTML = "";
+      summaryEl.textContent = "";
+      summaryEl.classList.add("hidden");
+      unexposedList.innerHTML = "";
+      timelineEl.innerHTML = "";
+
+      const audit = sessionData?.auditRecord;
+      const ctx = sessionData?.sessionContext;
+      const tab = sessionData?.captureTab;
+      const signOff = audit?.signOffContext || sessionData?.signOffContext;
+
+      if (!ctx && !tab && !audit) {
+        panel.classList.add("hidden");
+        unexposedPanel.classList.add("hidden");
+        timelinePanel.classList.add("hidden");
+        return;
+      }
+
+      const auditSession = audit?.sessionContext || {};
+      const page = ctx?.page || {};
+      const env = audit?.environmentTelemetry || ctx?.environment || {};
+      const platform = ctx?.platform || {};
+      const interaction = ctx?.interaction || {};
+      const attachments = interaction.attachments || {};
+      const unexposed = audit?.unexposedMediaManifest || {};
+
+      if (audit?.interactionSummary) {
+        summaryEl.textContent = audit.interactionSummary;
+        summaryEl.classList.remove("hidden");
+      }
+
+      appendContextRow(
+        grid,
+        "Captured at",
+        env.capturedAt || audit?.recordedAt || tab?.capturedAt
+      );
+      appendContextRow(grid, "Signed off at", signOff?.anchoredAt);
+      appendContextRow(grid, "Time zone", env.timeZone);
+      appendContextRow(
+        grid,
+        "UTC offset (min)",
+        env.localTimezoneOffsetMinutes
+      );
+      appendContextRow(grid, "Screen", env.screenResolution);
+      appendContextRow(grid, "Page URL", auditSession.sessionUrl || tab?.url || page.url);
+      appendContextRow(grid, "Conversation ID", auditSession.conversationId || page.conversationId);
+      appendContextRow(
+        grid,
+        "Session title",
+        auditSession.sessionTitle || tab?.title || page.title
+      );
+      appendContextRow(grid, "Model", auditSession.scrapedModel || platform.modelName);
+      appendContextRow(grid, "Custom GPT", auditSession.customGptName || platform.customGptName);
+      appendContextRow(grid, "Project", auditSession.projectName || platform.projectName);
+      appendContextRow(
+        grid,
+        "Messages",
+        auditSession.turnCount != null
+          ? `${auditSession.userTurnCount ?? 0} user · ${auditSession.assistantTurnCount ?? 0} assistant · ${auditSession.turnCount} total`
+          : null
+      );
+      appendContextRow(
+        grid,
+        "Scroll audit",
+        auditSession.scrollPasses != null
+          ? `${auditSession.scrollPasses} pass(es) · ${auditSession.viewportCheckpointsPerPass ?? 5} checkpoints/pass`
+          : null
+      );
+      appendContextRow(
+        grid,
+        "Attachments",
+        attachments.documents || attachments.images || attachments.videos
+          ? `docs ${attachments.documents?.referenced ?? 0} (${attachments.documents?.captured ?? 0} captured) · ` +
+            `images ${attachments.images?.referenced ?? 0} · videos ${attachments.videos?.referenced ?? 0}`
+          : null
+      );
+      appendContextRow(grid, "Identity proof", signOff?.identityProofAddress);
+      appendContextRow(
+        grid,
+        "Viewport",
+        env.viewport
+          ? `${env.viewport.width}×${env.viewport.height} @${env.viewport.devicePixelRatio}x`
+          : null
+      );
+
+      const features = auditSession.sessionFeatures || platform.visibleFeatures;
+      if (Array.isArray(features) && features.length) {
+        const row = document.createElement("div");
+        row.className = "meta-row";
+
+        const labelEl = document.createElement("div");
+        labelEl.className = "meta-label";
+        labelEl.textContent = "Session features";
+
+        const valueEl = document.createElement("div");
+        valueEl.className = "meta-value";
+        const chips = document.createElement("div");
+        chips.className = "context-chip-list";
+        features.forEach((feature) => {
+          const chip = document.createElement("span");
+          chip.className = "context-chip";
+          chip.textContent = feature;
+          chips.appendChild(chip);
+        });
+        valueEl.appendChild(chips);
+
+        row.appendChild(labelEl);
+        row.appendChild(valueEl);
+        grid.appendChild(row);
+      }
+
+      panel.classList.toggle("hidden", grid.children.length === 0 && summaryEl.classList.contains("hidden"));
+
+      const unexposedItems = [
+        ...safeArray(unexposed.missingPdfs).map((name) => `[PDF] ${name}`),
+        ...safeArray(unexposed.missingAudio).map((name) => `[Audio] ${name}`),
+        ...safeArray(unexposed.missingVideo).map((name) => `[Video] ${name}`),
+        ...safeArray(unexposed.missingDocuments).map((name) => `[File] ${name}`),
+      ];
+
+      unexposedItems.forEach((label) => {
+        const item = document.createElement("li");
+        item.textContent = label;
+        unexposedList.appendChild(item);
+      });
+      unexposedPanel.classList.toggle("hidden", unexposedItems.length === 0);
+
+      safeArray(audit?.interactionTimeline).forEach((event) => {
+        const item = document.createElement("li");
+        if (String(event.type || "").includes("unexposed")) {
+          item.className = "audit-unexposed";
+        }
+
+        const type = document.createElement("span");
+        type.className = "audit-timeline-type";
+        type.textContent = String(event.type || "event").replace(/-/g, " ");
+
+        item.appendChild(type);
+        item.appendChild(document.createTextNode(event.summary || ""));
+        timelineEl.appendChild(item);
+      });
+      timelinePanel.classList.toggle(
+        "hidden",
+        !audit?.interactionTimeline || audit.interactionTimeline.length === 0
+      );
+    }
+
+    function safeArray(value) {
+      return Array.isArray(value) ? value : [];
+    }
+
+    function appendCapturedVideo(container, sessionData) {
+      const capturedVideo = sessionData?.capturedVideo;
+      if (!capturedVideo) {
+        return;
+      }
+
+      const wrap = document.createElement("div");
+      wrap.className = "session-video";
+
+      const label = document.createElement("div");
+      label.className = "session-video-label";
+      label.textContent = "Tab recording";
+
+      const video = document.createElement("video");
+      video.className = "session-video-player";
+      video.controls = true;
+      video.playsInline = true;
+      video.preload = "metadata";
+      video.src = normalizeVideoSrc(capturedVideo, sessionData.capturedVideoMime);
+
+      wrap.appendChild(label);
+      wrap.appendChild(video);
+      container.appendChild(wrap);
+    }
+
+    function renderConversation(sessionData) {
+      if (!sessionData || typeof sessionData !== "object") {
+        showError("Decrypted payload was empty or malformed.");
+        return;
+      }
+
+      const messages = [...(Array.isArray(sessionData.conversation) ? sessionData.conversation : [])]
+        .sort((left, right) => (Number(left.index) || 0) - (Number(right.index) || 0));
+      const sessionImages = Array.isArray(sessionData.sessionImages)
+        ? sessionData.sessionImages
+        : [];
+      const sessionVideos = Array.isArray(sessionData.sessionVideos)
+        ? sessionData.sessionVideos
+        : [];
+      const sessionDocuments = Array.isArray(sessionData.sessionDocuments)
+        ? sessionData.sessionDocuments
+        : [];
+      const linkedImageIndexes = new Set(
+        sessionDocuments
+          .map((document) => Number(document?.relatedImageIndex))
+          .filter((index) => Number.isFinite(index) && index > 0)
+      );
+      const successfulImages = sessionImages.filter(
+        (image) =>
+          image?.captureStatus === "success" &&
+          image?.base64 &&
+          !linkedImageIndexes.has(Number(image.index))
+      );
+      const successfulVideos = sessionVideos.filter(
+        (video) =>
+          (video?.captureStatus === "success" && video?.base64) ||
+          video?.captureStatus === "metadata-only"
+      );
+      const successfulDocuments = collapseEquivalentDocuments(
+        sessionDocuments.filter(
+          (document) =>
+            (document?.captureStatus === "success" && document?.base64) ||
+            document?.captureStatus === "metadata-only"
+        )
+      );
+      const successfulMedia = dedupeMetadataOnlyByFilename(
+        [...successfulImages, ...successfulVideos, ...successfulDocuments].sort(
+          (left, right) =>
+            (Number(left.afterMessageIndex) || 0) - (Number(right.afterMessageIndex) || 0)
+        )
+      );
+      const mediaByMessage = buildMediaByMessageIndex(messages, successfulMedia);
+      const capturedVideo = sessionData.capturedVideo;
+      const chatLog = document.getElementById("chat-log");
+      chatLog.innerHTML = "";
+
+      if (!messages.length && !successfulMedia.length && !capturedVideo) {
+        showError("Decrypted successfully, but no conversation messages were found.");
+        return;
+      }
+
+      const platform = sessionData.sourcePlatform || loadedSession?.sourcePlatform || "unknown";
+      const platformLabels = {
+        chatgpt: "ChatGPT",
+        gemini: "Gemini",
+        claude: "Claude",
+        grok: "Grok",
+        "x-grok": "Grok on X",
+        perplexity: "Perplexity",
+        copilot: "Microsoft Copilot",
+        poe: "Poe",
+        "meta-ai": "Meta AI",
+        deepseek: "DeepSeek",
+        mistral: "Mistral",
+        you: "You.com",
+        pi: "Pi",
+        character: "Character.AI",
+        huggingface: "HuggingChat",
+      };
+      const platformLabel = platformLabels[platform] || platform;
+      document.getElementById("chat-meta").textContent =
+        `${messages.length} messages · ${platformLabel}` +
+        (successfulDocuments.length
+          ? ` · ${successfulDocuments.length} document(s)`
+          : "") +
+        (successfulVideos.length ? ` · ${successfulVideos.length} chat video(s)` : "") +
+        (capturedVideo ? " · tab video" : "") +
+        (loadedSession?.timestamp ? ` · anchored ${loadedSession.timestamp}` : "");
+
+      renderSessionContext(sessionData);
+
+      messages.forEach((message) => {
+        const media = mediaByMessage.get(message.index) || [];
+        appendMessageBubble(chatLog, message, { hasMedia: media.length > 0 });
+
+        if (media.length) {
+          appendInlineMedia(chatLog, media, normalizeRole(message.role));
+        }
+      });
+
+      appendCapturedVideo(chatLog, sessionData);
+
+      if (messages.length || successfulMedia.length || capturedVideo) {
+        chatPanel.classList.remove("hidden");
+      } else {
+        chatPanel.classList.add("hidden");
+      }
+
+      clearError();
+    }
+
+    dropzone.addEventListener("click", () => openArchivePicker());
+
+    dropzone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      dropzone.classList.add("dragover");
+    });
+
+    dropzone.addEventListener("dragleave", () => {
+      dropzone.classList.remove("dragover");
+    });
+
+    dropzone.addEventListener("drop", (event) => {
+      event.preventDefault();
+      dropzone.classList.remove("dragover");
+      if (!event.dataTransfer?.files?.length) {
+        return;
+      }
+      processIncomingFiles(event.dataTransfer.files);
+    });
+
+    fileInput.addEventListener("change", (event) => {
+      const files = event.target.files;
+      if (!files?.length) {
+        return;
+      }
+      processIncomingFiles(files);
+      fileInput.value = "";
+    });
+
+    decryptButton.addEventListener("click", handleDecrypt);
+  </script>
+</body>
+</html>
