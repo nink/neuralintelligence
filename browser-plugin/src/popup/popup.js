@@ -9,6 +9,17 @@ import {
 import { createMockAnchorReceipt, LOCAL_DEV_ACCOUNTING } from "../utils/devStubs.js";
 import { TabVideoRecorder } from "../content/videoRecorder.js";
 import { isSupportedChatUrl } from "../config/chatPlatforms.js";
+import {
+  anchorSessionToLedger,
+  resolvePlatformIdFromTab,
+} from "../utils/web3Bridge.js";
+import { NINK_CHAIN_CONFIG } from "../config/chainConfig.js";
+import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
+import { getOnChainWalletSnapshot, readChainHealth } from "../utils/tokenBalance.js";
+
+function isLocalHardhatChain() {
+  return Number(NINK_CHAIN_CONFIG.chainId) === 31337;
+}
 
 const CONTENT_SCRIPT_PATHS = [
   "src/config/chatPlatforms.global.js",
@@ -408,10 +419,28 @@ async function runSignOffInPopup(useDevStubs) {
     throw new Error("Accounting data not ready. Close and reopen the popup.");
   }
 
-  if (!hasSufficientBalance(accounting.userBalance, accounting.requiredFee)) {
-    throw new Error(
-      `Insufficient funds. Required: ${formatTokenForDisplay(accounting.requiredFee)}, Available: ${formatTokenForDisplay(accounting.userBalance)}`
-    );
+  if (useDevStubs) {
+    if (!hasSufficientBalance(accounting.userBalance, accounting.requiredFee)) {
+      throw new Error(
+        `Insufficient funds. Required: ${formatTokenForDisplay(accounting.requiredFee)}, Available: ${formatTokenForDisplay(accounting.userBalance)}`
+      );
+    }
+  } else if (isLocalHardhatChain()) {
+    const health = await readChainHealth();
+    if (!health.ok) {
+      throw new Error(
+        health.reason === "rpc-unreachable" || health.reason?.includes("fetch")
+          ? "Local Hardhat chain is not running. Start: npx hardhat node"
+          : `Local chain not ready (${health.reason || "unknown"}). Redeploy: npx hardhat run scripts/deploy.js --network localhost`
+      );
+    }
+
+    const snapshot = await getOnChainWalletSnapshot(null);
+    if (!snapshot.ok || !hasSufficientBalance(snapshot.balanceWei, snapshot.anchorFeeWei)) {
+      throw new Error(
+        `Insufficient on-chain NINK. Required: ${snapshot.anchorFeeFormatted || "?"} NINK, Available: ${snapshot.balanceFormatted || "0"} NINK`
+      );
+    }
   }
 
   const tab = await getActiveChatTab();
@@ -419,6 +448,17 @@ async function runSignOffInPopup(useDevStubs) {
     throw new Error(
       "Open a supported AI chat tab (ChatGPT, Gemini, Claude, Grok, Perplexity, Copilot, etc.) before sign-off."
     );
+  }
+
+  if (!useDevStubs && isLocalHardhatChain()) {
+    const health = await readChainHealth();
+    if (!health.ok) {
+      throw new Error(
+        health.reason === "rpc-unreachable" || String(health.reason || "").includes("fetch")
+          ? "Local Hardhat chain is not running. Start: npx hardhat node"
+          : `Local chain not ready (${health.reason || "unknown"}). Redeploy contracts.`
+      );
+    }
   }
 
   const tabVideoRecorder = new TabVideoRecorder();
@@ -479,23 +519,12 @@ async function runSignOffInPopup(useDevStubs) {
   }
 
   sessionData.signOffContext = {
-    anchoredAt: new Date().toISOString(),
     feeApplied: accounting.requiredFee,
     balanceAtSignOff: accounting.userBalance,
     accountingSource: accounting.source || null,
-    identityProofAddress: "0xUserWallet",
     isLocalDevMode: Boolean(useDevStubs || accounting.isLocalDevMode),
     anchorProofLocation: "outer-envelope",
   };
-
-  if (sessionData.auditRecord) {
-    sessionData.auditRecord.signOffContext = sessionData.signOffContext;
-    if (sessionData.auditRecord.interactionSummary) {
-      sessionData.auditRecord.interactionSummary += ` Signed off at ${sessionData.signOffContext.anchoredAt}.`;
-    }
-  }
-
-  const anchoredAt = new Date().toISOString();
 
   const localKey = await generateLocalKey();
   const aesKeyBase64 = await exportKeyAsBase64(localKey);
@@ -507,11 +536,52 @@ async function runSignOffInPopup(useDevStubs) {
     throw new Error("Encrypted payload generation failed.");
   }
 
-  const chainReceipt = await resolveAnchorReceipt(
-    stateHash,
-    accounting.requiredFee,
-    useDevStubs
-  );
+  const platformId = resolvePlatformIdFromTab(tab.url, sessionData.sourcePlatform);
+  const anchorTimestamp = Math.floor(Date.now() / 1000);
+  let chainReceipt;
+
+  if (useDevStubs) {
+    chainReceipt = await resolveAnchorReceipt(
+      stateHash,
+      accounting.requiredFee,
+      useDevStubs
+    );
+    sessionData.signOffContext.identityProofAddress = "0xUserWallet";
+    sessionData.signOffContext.anchorMethod = chainReceipt.source || "local-dev-fallback";
+  } else {
+    const anchorResult = await anchorSessionToLedger(
+      stateHash,
+      platformId,
+      anchorTimestamp,
+      tab.id
+    );
+    chainReceipt = {
+      txHash: anchorResult.transactionHash,
+      blockNumber: anchorResult.blockNumber,
+      registryAddress: anchorResult.registryAddress,
+      validatorAddress: anchorResult.validatorAddress,
+      chainId: anchorResult.chainId,
+      source: anchorResult.anchorMethod || "local-rpc-signer",
+      isLocalDevMode: false,
+    };
+    sessionData.signOffContext.identityProofAddress = anchorResult.validatorAddress;
+    sessionData.signOffContext.anchorMethod = anchorResult.anchorMethod || "local-rpc-signer";
+    sessionData.signOffContext.onChainTransactionHash = anchorResult.transactionHash;
+    sessionData.signOffContext.registryAddress = anchorResult.registryAddress;
+    sessionData.signOffContext.platformId = platformId;
+    sessionData.signOffContext.anchorTimestamp = anchorTimestamp;
+  }
+
+  const anchoredAt = new Date().toISOString();
+  sessionData.signOffContext.anchoredAt = anchoredAt;
+  sessionData.signOffContext.stateHash = stateHash;
+
+  if (sessionData.auditRecord) {
+    sessionData.auditRecord.signOffContext = sessionData.signOffContext;
+    if (sessionData.auditRecord.interactionSummary) {
+      sessionData.auditRecord.interactionSummary += ` Signed off at ${anchoredAt}.`;
+    }
+  }
 
   const sessionImages = Array.isArray(sessionData.sessionImages)
     ? sessionData.sessionImages
@@ -543,9 +613,16 @@ async function runSignOffInPopup(useDevStubs) {
   return {
     completedPackage: {
       version: `NINK-V${chrome.runtime.getManifest().version}`,
-      blockchainNetwork: useDevStubs ? "Base-Sepolia-Mock" : "Base-Sepolia",
+      blockchainNetwork: useDevStubs
+        ? "Base-Sepolia-Mock"
+        : `chain-${chainReceipt.chainId ?? NINK_CHAIN_CONFIG.chainId ?? "unknown"}`,
       timestamp: anchoredAt,
       sourcePlatform: sessionData.sourcePlatform,
+      platformId,
+      anchorMethod: chainReceipt.source || (useDevStubs ? "local-dev-fallback" : "local-rpc-signer"),
+      registryAddress: chainReceipt.registryAddress || NINK_CHAIN_CONFIG.registryAddress || null,
+      validatorAddress: chainReceipt.validatorAddress || sessionData.signOffContext.identityProofAddress || null,
+      blockNumber: chainReceipt.blockNumber ?? null,
       transactionHash: chainReceipt.txHash,
       stateHash,
       payloadCompression: "gzip",
@@ -572,30 +649,115 @@ async function runSignOffInPopup(useDevStubs) {
   };
 }
 
+async function refreshOnChainWalletPanel() {
+  const onchainPanel = document.getElementById("onchain-panel");
+  const mockPanel = document.getElementById("mock-metrics-panel");
+  const balanceEl = document.getElementById("onchain-balance-display");
+  const feeEl = document.getElementById("onchain-fee-display");
+  const walletLabel = document.getElementById("onchain-wallet-label");
+  const healthLabel = document.getElementById("chain-health-label");
+
+  const stored = await readLocalStorage(["ninkConfig"]);
+  const useDevStubs = stored.ninkConfig?.useDevStubs ?? DEFAULT_NINK_CONFIG.useDevStubs;
+
+  if (useDevStubs) {
+    onchainPanel.hidden = true;
+    mockPanel.hidden = false;
+    return;
+  }
+
+  onchainPanel.hidden = false;
+  mockPanel.hidden = true;
+  walletLabel.textContent = "Reading balance from token contract…";
+  healthLabel.textContent = "";
+
+  try {
+    let walletAddress = null;
+
+    try {
+      const tab = await getActiveChatTab();
+      const probe = await sendBackgroundMessage({
+        action: "GET_METAMASK_ADDRESS",
+        tabId: tab.id,
+      });
+      walletAddress = probe?.address || null;
+    } catch (_error) {
+      // Popup may be opened outside a chat tab — fall back to local dev wallet.
+    }
+
+    const snapshot = await getOnChainWalletSnapshot(walletAddress);
+
+    if (!snapshot?.ok) {
+      balanceEl.textContent = "Unavailable";
+      feeEl.textContent = "—";
+      walletLabel.textContent =
+        "Start Hardhat node, then redeploy: npx hardhat run scripts/deploy.js --network localhost";
+      healthLabel.textContent = snapshot?.health?.reason || "Chain unavailable";
+      healthLabel.className = "onchain-note chain-health-bad";
+      document.getElementById("sign-off-btn").disabled = true;
+      return;
+    }
+
+    balanceEl.textContent = `${snapshot.balanceFormatted} NINK`;
+    feeEl.textContent = snapshot.anchorFeeFormatted;
+    walletLabel.textContent = `Wallet ${shortAddress(snapshot.walletAddress)} · read from token contract (source of truth, not MetaMask UI).`;
+    healthLabel.textContent = `Chain ${snapshot.health.chainId} OK · token ${shortAddress(snapshot.tokenAddress)}`;
+    healthLabel.className = "onchain-note chain-health-ok";
+
+    document.getElementById("sign-off-btn").disabled = !hasSufficientBalance(
+      snapshot.balanceWei,
+      snapshot.anchorFeeWei
+    );
+  } catch (error) {
+    balanceEl.textContent = "Unavailable";
+    feeEl.textContent = "—";
+    walletLabel.textContent = error.message || "Could not read on-chain balance.";
+    healthLabel.textContent = "Is Hardhat running on http://127.0.0.1:8545 ?";
+    healthLabel.className = "onchain-note chain-health-bad";
+    document.getElementById("sign-off-btn").disabled = true;
+  }
+}
+
+function shortAddress(address) {
+  const value = String(address || "");
+  if (value.length < 10) {
+    return value || "unknown";
+  }
+  return `${value.slice(0, 6)}…${value.slice(-4)}`;
+}
+
 async function updateUI() {
   try {
     const stored = await readLocalStorage(["accounting", "ninkConfig"]);
     const accounting = stored.accounting;
-    const useDevStubs = stored.ninkConfig?.useDevStubs !== false;
+    const useDevStubs = stored.ninkConfig?.useDevStubs ?? DEFAULT_NINK_CONFIG.useDevStubs;
 
     document.getElementById("dev-stub-toggle").checked = useDevStubs;
 
-    if (accounting) {
-      document.getElementById("balance-display").innerText = formatTokenForDisplay(
-        accounting.userBalance
-      );
-      document.getElementById("fee-display").innerText = formatTokenForDisplay(
-        accounting.requiredFee
-      );
+    if (useDevStubs) {
+      if (accounting) {
+        document.getElementById("balance-display").innerText = formatTokenForDisplay(
+          accounting.userBalance
+        );
+        document.getElementById("fee-display").innerText = formatTokenForDisplay(
+          accounting.requiredFee
+        );
+      }
+
+      document.getElementById("sign-off-btn").disabled = accounting
+        ? !hasSufficientBalance(accounting.userBalance, accounting.requiredFee)
+        : false;
+    } else {
+      await refreshOnChainWalletPanel();
     }
 
-    setLocalDevModeIndicator(useDevStubs || Boolean(accounting?.isLocalDevMode));
-
-    document.getElementById("sign-off-btn").disabled = accounting
-      ? !hasSufficientBalance(accounting.userBalance, accounting.requiredFee)
-      : false;
-  } catch (_error) {
-    // Storage may not be seeded yet on first open.
+    setLocalDevModeIndicator(useDevStubs);
+  } catch (error) {
+    const healthLabel = document.getElementById("chain-health-label");
+    if (healthLabel) {
+      healthLabel.textContent = error.message || "UI update failed";
+      healthLabel.className = "onchain-note chain-health-bad";
+    }
   }
 }
 
@@ -633,14 +795,25 @@ document.getElementById("dev-stub-toggle").addEventListener("change", async (eve
   }
 });
 
+document.getElementById("wallet-setup-btn").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("wallet-setup.html") });
+});
+
+let signOffInProgress = false;
+
 document.getElementById("sign-off-btn").addEventListener("click", async () => {
+  if (signOffInProgress) {
+    return;
+  }
+
   const consoleLog = document.getElementById("status-console");
   const signOffButton = document.getElementById("sign-off-btn");
   const useDevStubs = document.getElementById("dev-stub-toggle").checked;
 
+  signOffInProgress = true;
   consoleLog.innerText = useDevStubs
-    ? "Capturing and encrypting locally (no network)..."
-    : "Capturing, encrypting, and anchoring...";
+    ? "Capturing and encrypting locally (mock anchor)..."
+    : "Capturing, encrypting, and anchoring on local Hardhat chain...";
   signOffButton.disabled = true;
 
   try {
@@ -697,6 +870,7 @@ document.getElementById("sign-off-btn").addEventListener("click", async () => {
   } catch (error) {
     consoleLog.innerText = `Error: ${error.message}`;
   } finally {
+    signOffInProgress = false;
     signOffButton.disabled = false;
     updateUI();
   }

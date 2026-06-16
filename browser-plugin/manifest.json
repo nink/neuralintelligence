@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NINK Work-Product Authenticator",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "description": "Secures AI session work-products via localized encryption and L2 blockchain anchoring.",
   "permissions": [
     "activeTab",
@@ -40,7 +40,20 @@
     "service_worker": "src/background/background.js",
     "type": "module"
   },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
-    "default_popup": "src/popup/popup.html"
+    "default_popup": "src/popup/popup.html",
+    "default_title": "NINK Sign-Off",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   }
 }

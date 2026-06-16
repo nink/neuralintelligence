@@ -17,11 +17,24 @@
     </header>
 
     <label class="dev-toggle">
-      <input id="dev-stub-toggle" type="checkbox" checked>
-      <span>Local test mode (skip api.nink.network — no on-chain calls)</span>
+      <input id="dev-stub-toggle" type="checkbox">
+      <span>Mock mode — skip blockchain entirely (fastest testing)</span>
     </label>
 
-    <section class="metrics-card" aria-live="polite">
+    <section id="onchain-panel" class="metrics-card onchain-panel" aria-live="polite" hidden>
+      <div class="metric-row">
+        <span class="metric-label">On-chain NINK</span>
+        <span class="metric-value"><span id="onchain-balance-display">—</span></span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Anchor fee (registry)</span>
+        <span class="metric-value"><span id="onchain-fee-display">—</span> NINK</span>
+      </div>
+      <p id="onchain-wallet-label" class="onchain-note">Reading balance from token contract…</p>
+      <p id="chain-health-label" class="onchain-note"></p>
+    </section>
+
+    <section class="metrics-card" aria-live="polite" id="mock-metrics-panel">
       <div class="metric-row">
         <span class="metric-label">Balance</span>
         <span class="metric-value"><span id="balance-display">0.0000</span> NINK</span>
@@ -33,6 +46,7 @@
     </section>
 
     <button id="sign-off-btn" type="button">Press NINK to Sign-Off</button>
+    <button id="wallet-setup-btn" type="button" class="secondary-btn" hidden>Advanced: MetaMask setup (optional)</button>
     <div id="status-console" class="status-console" role="status"></div>
   </main>
 

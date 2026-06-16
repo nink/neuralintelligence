@@ -3,6 +3,23 @@ import {
   LOCAL_DEV_ACCOUNTING,
   createMockAnchorReceipt,
 } from "../utils/devStubs.js";
+import {
+  anchorViaActiveTab,
+  probeWalletOnTab,
+  walletProbeErrorMessage,
+} from "../utils/walletInject.js";
+import {
+  anchorViaLocalRpc,
+  ensureLocalChainReady,
+  isLocalHardhatChain,
+} from "../utils/localChainAnchor.js";
+import {
+  getOnChainWalletSnapshot,
+  LOCAL_DEV_WALLET,
+} from "../utils/tokenBalance.js";
+import {
+  readMetaMaskAddressOnTab,
+} from "../utils/walletTokenUi.js";
 const PRODUCTION_ACCOUNTING_URL =
   "https://api.nink.network/v1/accounting/parameters?user=0xUserWallet";
 const PRODUCTION_ANCHOR_URL = "https://api.nink.network/v1/blockchain/anchor";
@@ -148,6 +165,80 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       sendResponse({ status: "SUCCESS", config: nextConfig });
     })().catch((error) => {
       sendResponse({ status: "ERROR", message: error.toString() });
+    });
+    return true;
+  }
+
+  if (request.action === "PROBE_WALLET_ON_TAB") {
+    (async () => {
+      const probe = await probeWalletOnTab(request.tabId);
+      sendResponse({ status: "SUCCESS", probe });
+    })().catch((error) => {
+      sendResponse({ status: "ERROR", message: error.message || String(error) });
+    });
+    return true;
+  }
+
+  if (request.action === "ANCHOR_SESSION_TO_LEDGER") {
+    (async () => {
+      let walletResult;
+
+      if (isLocalHardhatChain()) {
+        await ensureLocalChainReady();
+        walletResult = await anchorViaLocalRpc(request.injectionArgs);
+      } else {
+        walletResult = await anchorViaActiveTab(
+          request.tabId,
+          request.injectionArgs
+        );
+      }
+
+      sendResponse({ status: "SUCCESS", result: walletResult });
+    })().catch((error) => {
+      sendResponse({
+        status: "ERROR",
+        message: error.message || String(error),
+      });
+    });
+    return true;
+  }
+
+  if (request.action === "ENSURE_LOCAL_CHAIN") {
+    (async () => {
+      const status = await ensureLocalChainReady();
+      sendResponse({ status: "SUCCESS", chain: status });
+    })().catch((error) => {
+      sendResponse({ status: "ERROR", message: error.message || String(error) });
+    });
+    return true;
+  }
+
+  if (request.action === "GET_METAMASK_ADDRESS") {
+    (async () => {
+      const address = await readMetaMaskAddressOnTab(request.tabId);
+      sendResponse({ status: "SUCCESS", address });
+    })().catch((error) => {
+      sendResponse({ status: "ERROR", message: error.message || String(error) });
+    });
+    return true;
+  }
+
+  if (request.action === "GET_ON_CHAIN_WALLET") {
+    (async () => {
+      let walletAddress = request.walletAddress || null;
+
+      if (request.tabId) {
+        try {
+          walletAddress = (await readMetaMaskAddressOnTab(request.tabId)) || walletAddress;
+        } catch (_error) {
+          // Fall back to local dev wallet or explicit address.
+        }
+      }
+
+      const snapshot = await getOnChainWalletSnapshot(walletAddress);
+      sendResponse({ status: "SUCCESS", snapshot });
+    })().catch((error) => {
+      sendResponse({ status: "ERROR", message: error.message || String(error) });
     });
     return true;
   }

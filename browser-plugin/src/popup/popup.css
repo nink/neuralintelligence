@@ -131,6 +131,45 @@ body {
   cursor: not-allowed;
 }
 
+.onchain-panel {
+  border-color: rgba(61, 214, 140, 0.35);
+  background: rgba(61, 214, 140, 0.05);
+}
+
+.onchain-note {
+  margin: 10px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.chain-health-ok {
+  color: var(--success);
+}
+
+.chain-health-bad {
+  color: var(--danger);
+}
+
+.secondary-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.secondary-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 .status-console {
   min-height: 48px;
   margin-top: 14px;

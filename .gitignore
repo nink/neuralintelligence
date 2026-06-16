@@ -4,3 +4,10 @@ Thumbs.db
 .env.*
 *.local
 node_modules/
+packages/contracts/node_modules/
+packages/contracts/cache/
+packages/contracts/artifacts/
+packages/contracts/typechain-types/
+packages/contracts/coverage/
+packages/contracts/.env
+browser-plugin/node_modules/

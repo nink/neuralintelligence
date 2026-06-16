@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NINK — MetaMask Local Wallet Setup</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e8eef7;
+      --muted: #8fa3bf;
+      --accent: #ff2d78;
+      --ok: #3dd68c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 8px; }
+    .lead { color: var(--muted); margin: 0 0 28px; }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+    }
+    h2 { font-size: 1rem; margin: 0 0 12px; }
+    ol { margin: 0; padding-left: 20px; }
+    li { margin-bottom: 10px; }
+    .field {
+      display: grid;
+      gap: 6px;
+      margin: 12px 0;
+    }
+    label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .copy-row {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+    }
+    code, input {
+      flex: 1;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.85rem;
+      background: #0b1018;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      word-break: break-all;
+    }
+    input { width: 100%; }
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .copy-btn { background: #2d3a4f; color: var(--text); }
+    .copy-btn:hover { background: #3d4d66; }
+    .primary {
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      display: inline-block;
+      margin-top: 8px;
+    }
+    .primary:hover { filter: brightness(1.08); }
+    .status {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 0.92rem;
+    }
+    .status.ok { background: rgba(61, 214, 140, 0.12); border: 1px solid rgba(61, 214, 140, 0.35); }
+    .status.warn { background: rgba(255, 107, 107, 0.1); border: 1px solid rgba(255, 107, 107, 0.35); }
+    .note { font-size: 0.88rem; color: var(--muted); margin-top: 8px; }
+    .check { color: var(--ok); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>NINK local wallet setup</h1>
+    <p class="lead">
+      One-time MetaMask setup for on-chain sign-off on your local Hardhat chain.
+      These are public test keys — never use them on mainnet.
+    </p>
+
+    <section>
+      <h2>Step 1 — Install MetaMask</h2>
+      <ol>
+        <li>Install the MetaMask browser extension if you do not have it yet.</li>
+        <li>Create a new wallet or import an existing one — any MetaMask profile works.</li>
+        <li>Unlock MetaMask before NINK sign-off.</li>
+      </ol>
+      <a class="primary" href="https://metamask.io/download/" target="_blank" rel="noopener">Install MetaMask</a>
+    </section>
+
+    <section>
+      <h2>Step 2 — Add the local Hardhat network</h2>
+      <p class="note">MetaMask → network dropdown → <strong>Add network</strong> → <strong>Add a network manually</strong></p>
+      <div class="field">
+        <label>Network name</label>
+        <div class="copy-row">
+          <input id="net-name" readonly value="Hardhat Local">
+          <button class="copy-btn" type="button" data-copy="net-name">Copy</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>RPC URL</label>
+        <div class="copy-row">
+          <input id="net-rpc" readonly value="http://127.0.0.1:8545">
+          <button class="copy-btn" type="button" data-copy="net-rpc">Copy</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Chain ID</label>
+        <div class="copy-row">
+          <input id="net-chain" readonly value="31337">
+          <button class="copy-btn" type="button" data-copy="net-chain">Copy</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Currency symbol</label>
+        <div class="copy-row">
+          <input id="net-symbol" readonly value="ETH">
+          <button class="copy-btn" type="button" data-copy="net-symbol">Copy</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Step 3 — Import a funded test account</h2>
+      <p class="note">MetaMask → account icon → <strong>Import account</strong> → paste private key below.</p>
+      <div class="field">
+        <label>Test address (Account #0)</label>
+        <div class="copy-row">
+          <input id="test-address" readonly value="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266">
+          <button class="copy-btn" type="button" data-copy="test-address">Copy</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Private key (Hardhat public test key)</label>
+        <div class="copy-row">
+          <input id="test-key" readonly value="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80">
+          <button class="copy-btn" type="button" data-copy="test-key">Copy</button>
+        </div>
+      </div>
+      <p class="note">This account starts with 10,000 test ETH on every fresh Hardhat node.</p>
+    </section>
+
+    <section>
+      <h2>Step 4 — Start the local chain (if not running)</h2>
+      <p>In a terminal from <code>packages/contracts</code>:</p>
+      <div class="field">
+        <label>Terminal 1 — keep running</label>
+        <div class="copy-row">
+          <input id="cmd-node" readonly value="npx hardhat node">
+          <button class="copy-btn" type="button" data-copy="cmd-node">Copy</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Terminal 2 — run after each node restart</label>
+        <div class="copy-row">
+          <input id="cmd-deploy" readonly value="npx hardhat run scripts/deploy.js --network localhost">
+          <button class="copy-btn" type="button" data-copy="cmd-deploy">Copy</button>
+        </div>
+      </div>
+      <div id="chain-status" class="status warn">Checking local chain…</div>
+      <p class="note">Registry contract: <code id="registry-address">…</code></p>
+    </section>
+
+    <section>
+      <h2>Step 5 — Sign off in NINK</h2>
+      <ol>
+        <li>Reload the NINK extension at <code>chrome://extensions</code>.</li>
+        <li>Turn <strong>Local test mode OFF</strong> in the NINK popup.</li>
+        <li>Refresh your AI chat tab (ChatGPT, Claude, etc.).</li>
+        <li>Click <strong>Press NINK to Sign-Off</strong> — confirm in MetaMask on the chat tab.</li>
+      </ol>
+    </section>
+  </main>
+
+  <script type="module">
+    import { NINK_CHAIN_CONFIG } from "./src/config/chainConfig.js";
+
+    document.getElementById("registry-address").textContent =
+      NINK_CHAIN_CONFIG.registryAddress || "not deployed — run deploy script";
+
+    document.querySelectorAll("[data-copy]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const input = document.getElementById(button.dataset.copy);
+        if (!input) return;
+        await navigator.clipboard.writeText(input.value);
+        const original = button.textContent;
+        button.textContent = "Copied";
+        setTimeout(() => { button.textContent = original; }, 1200);
+      });
+    });
+
+    async function checkChain() {
+      const status = document.getElementById("chain-status");
+      try {
+        const response = await fetch("http://127.0.0.1:8545", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", method: "eth_chainId", params: [], id: 1 }),
+        });
+        const data = await response.json();
+        const chainId = parseInt(data.result, 16);
+        if (chainId === 31337) {
+          status.className = "status ok";
+          status.innerHTML =
+            '<span class="check">Local chain is running</span> on http://127.0.0.1:8545 (chain 31337).';
+        } else {
+          status.className = "status warn";
+          status.textContent = "RPC responded but chain ID is " + chainId + " (expected 31337).";
+        }
+      } catch (error) {
+        status.className = "status warn";
+        status.textContent = "Local chain is not running. Start it with: npx hardhat node";
+      }
+    }
+
+    checkChain();
+  </script>
+</body>
+</html>
