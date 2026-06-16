@@ -1,7 +1,7 @@
 import { hasSufficientBalance, formatTokenForDisplay } from "../utils/tokenMath.js";
 import { LOCAL_DEV_ACCOUNTING, STUB_ACCOUNT_ACCOUNTING } from "../utils/devStubs.js";
 import { isSupportedChatUrl } from "../config/chatPlatforms.js";
-import { resolveChatTabForSignOff } from "../utils/chatTab.js";
+import { resolveChatTabForSignOff, ensureScraperReadyOnTab } from "../utils/chatTab.js";
 import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
 import { getOnChainWalletSnapshot, readChainHealth } from "../utils/tokenBalance.js";
 import {
@@ -461,7 +461,11 @@ document.getElementById("sign-off-btn").addEventListener("click", async () => {
   signOffButton.disabled = true;
 
   try {
-    const tab = await getActiveChatTab();
+    const tab = await resolveChatTabForSignOff();
+    const scraperReady = await ensureScraperReadyOnTab(tab.id);
+    if (!scraperReady.ok) {
+      throw new Error(scraperReady.message || "Capture is not ready on this tab yet.");
+    }
     await validateSignOffReady(useDevStubs, tab.id);
 
     await chrome.storage.local.set({

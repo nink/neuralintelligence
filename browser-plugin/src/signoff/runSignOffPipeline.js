@@ -9,9 +9,9 @@ import {
 import { createMockAnchorReceipt } from "../utils/devStubs.js";
 import { TabVideoRecorder } from "../content/videoRecorder.js";
 import {
+  ensureScraperReadyOnTab,
   getChatTabById,
   isSupportedChatTab,
-  warmInjectScraperOnTab,
 } from "../utils/chatTab.js";
 
 import {
@@ -72,26 +72,12 @@ function readInjectionFailure(injectionResults) {
   return null;
 }
 
-async function captureSessionFromTab(tab, attempt = 1) {
+async function captureSessionFromTab(tab) {
   const expectedBuild = chrome.runtime.getManifest().version;
 
-  await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: () => {
-      delete globalThis.__NINK_scrapeChatSession__;
-      delete globalThis.__NINK_SCRAPER_BUILD__;
-    },
-  });
-
-  const injected = await warmInjectScraperOnTab(tab.id);
-  if (!injected) {
-    if (attempt < 2) {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      return captureSessionFromTab(tab, attempt + 1);
-    }
-    throw new Error(
-      "Could not prepare capture on this chat tab. Switch to your conversation tab and try again."
-    );
+  const ready = await ensureScraperReadyOnTab(tab.id, expectedBuild);
+  if (!ready.ok) {
+    throw new Error(ready.message || "Capture is not ready on this tab yet.");
   }
 
   let injectionResults;
@@ -105,7 +91,8 @@ async function captureSessionFromTab(tab, attempt = 1) {
           if (typeof scrape !== "function") {
             return {
               ok: false,
-              error: "Capture is not ready on this tab yet.",
+              error:
+                "Capture is not ready on this tab yet. Refresh your chat tab once, then try sign-off again.",
             };
           }
 
@@ -166,10 +153,6 @@ async function captureSessionFromTab(tab, attempt = 1) {
       args: [expectedBuild],
     });
   } catch (error) {
-    if (attempt < 2) {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      return captureSessionFromTab(tab, attempt + 1);
-    }
     throw new Error(
       error?.message ||
         "Could not capture this chat tab. Switch to your conversation tab and try again."
@@ -178,10 +161,6 @@ async function captureSessionFromTab(tab, attempt = 1) {
 
   const injectionFailure = readInjectionFailure(injectionResults);
   if (injectionFailure) {
-    if (attempt < 2 && /not ready|no session data|Capture is not ready/i.test(injectionFailure)) {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      return captureSessionFromTab(tab, attempt + 1);
-    }
     throw new Error(injectionFailure);
   }
 

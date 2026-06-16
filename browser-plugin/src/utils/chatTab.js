@@ -64,31 +64,83 @@ export async function resolveChatTabForSignOff() {
   );
 }
 
-export async function warmInjectScraperOnTab(tabId) {
+async function readScraperState(tabId, expectedBuild) {
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: (build) => ({
+      ready:
+        typeof globalThis.__NINK_scrapeChatSession__ === "function" &&
+        String(globalThis.__NINK_SCRAPER_BUILD__ || "") === String(build),
+      hasScrape: typeof globalThis.__NINK_scrapeChatSession__ === "function",
+      build: globalThis.__NINK_SCRAPER_BUILD__ || null,
+    }),
+    args: [expectedBuild],
+  });
+
+  return result || { ready: false, hasScrape: false, build: null };
+}
+
+async function injectScraperOnce(tabId, expectedBuild) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    func: (build) => {
+      globalThis.__NINK_SCRAPER_BUILD__ = build;
+    },
+    args: [expectedBuild],
+  });
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: CONTENT_SCRIPT_PATHS,
+  });
+}
+
+export async function ensureScraperReadyOnTab(tabId, expectedBuild = chrome.runtime.getManifest().version) {
   if (!tabId) {
-    return false;
+    return { ok: false, message: "Missing chat tab." };
   }
 
-  const expectedBuild = chrome.runtime.getManifest().version;
-
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      func: (build) => {
-        globalThis.__NINK_SCRAPER_BUILD__ = build;
-      },
-      args: [expectedBuild],
-    });
-
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: CONTENT_SCRIPT_PATHS,
-    });
-
-    return true;
-  } catch (_error) {
-    return false;
+  let state = await readScraperState(tabId, expectedBuild);
+  if (state.ready) {
+    return { ok: true };
   }
+
+  if (state.hasScrape && state.build !== expectedBuild) {
+    return {
+      ok: false,
+      message: `Extension updated to v${expectedBuild}. Refresh your chat tab once, then try sign-off again.`,
+    };
+  }
+
+  if (!state.hasScrape) {
+    try {
+      await injectScraperOnce(tabId, expectedBuild);
+    } catch (error) {
+      return {
+        ok: false,
+        message: error?.message || "Could not load capture on this chat tab.",
+      };
+    }
+  }
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    state = await readScraperState(tabId, expectedBuild);
+    if (state.ready) {
+      return { ok: true };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+
+  return {
+    ok: false,
+    message:
+      "Capture could not start on this tab. Refresh your chat tab once, then try sign-off again.",
+  };
+}
+
+export async function warmInjectScraperOnTab(tabId) {
+  const result = await ensureScraperReadyOnTab(tabId);
+  return result.ok;
 }
 
 export async function warmInjectOpenChatTabs() {
