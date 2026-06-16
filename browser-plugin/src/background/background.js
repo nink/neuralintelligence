@@ -8,15 +8,7 @@ import {
   probeWalletOnTab,
   walletProbeErrorMessage,
 } from "../utils/walletInject.js";
-import {
-  anchorViaLocalRpc,
-  ensureLocalChainReady,
-  isLocalHardhatChain,
-} from "../utils/localChainAnchor.js";
-import {
-  getOnChainWalletSnapshot,
-  LOCAL_DEV_WALLET,
-} from "../utils/tokenBalance.js";
+import { getOnChainWalletSnapshot } from "../utils/tokenBalance.js";
 import {
   readMetaMaskAddressOnTab,
 } from "../utils/walletTokenUi.js";
@@ -181,6 +173,8 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
 
   if (request.action === "ANCHOR_SESSION_TO_LEDGER") {
     (async () => {
+      const { anchorViaLocalRpc, ensureLocalChainReady, isLocalHardhatChain } =
+        await import("../utils/localChainAnchor.js");
       let walletResult;
 
       if (isLocalHardhatChain()) {
@@ -205,6 +199,7 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
 
   if (request.action === "ENSURE_LOCAL_CHAIN") {
     (async () => {
+      const { ensureLocalChainReady } = await import("../utils/localChainAnchor.js");
       const status = await ensureLocalChainReady();
       sendResponse({ status: "SUCCESS", chain: status });
     })().catch((error) => {

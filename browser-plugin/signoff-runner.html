@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NINK Sign-Off</title>
+  <link rel="stylesheet" href="src/popup/popup.css">
+  <style>
+    body { min-width: 380px; }
+    .runner-shell { padding: 18px; }
+    .runner-title { margin: 0 0 8px; font-size: 1.05rem; }
+    .runner-note { margin: 0 0 14px; color: #8fa3bf; font-size: 0.82rem; line-height: 1.45; }
+    #runner-status {
+      min-height: 120px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px dashed #2d3a4f;
+      background: rgba(255, 255, 255, 0.02);
+      font-size: 0.82rem;
+      line-height: 1.5;
+      color: #8fa3bf;
+      word-break: break-word;
+    }
+    #runner-status.success { color: #3dd68c; border-color: rgba(61, 214, 140, 0.35); }
+    #runner-status.error { color: #ff6b6b; border-color: rgba(255, 107, 107, 0.35); }
+  </style>
+</head>
+<body>
+  <main class="runner-shell">
+    <h1 class="runner-title">NINK Sign-Off</h1>
+    <p class="runner-note">
+      Keep this window open until both files save. MetaMask prompts appear on your chat tab — you may need to confirm twice (approve, then anchor). Choose save locations when Chrome asks.
+    </p>
+    <div id="runner-status" role="status">Starting sign-off…</div>
+  </main>
+  <script type="module" src="src/signoff/signoff-runner.js"></script>
+</body>
+</html>

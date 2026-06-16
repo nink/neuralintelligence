@@ -30,7 +30,11 @@
         <span class="metric-label">Anchor fee (registry)</span>
         <span class="metric-value"><span id="onchain-fee-display">—</span> NINK</span>
       </div>
-      <p id="onchain-wallet-label" class="onchain-note">Reading balance from token contract…</p>
+      <div class="wallet-connect-row">
+        <button id="connect-wallet-btn" type="button" class="secondary-btn wallet-connect-btn">Connect wallet</button>
+        <button id="disconnect-wallet-btn" type="button" class="secondary-btn wallet-disconnect-btn" hidden>Disconnect</button>
+      </div>
+      <p id="onchain-wallet-label" class="onchain-note">Connect MetaMask to view balance and sign off.</p>
       <p id="chain-health-label" class="onchain-note"></p>
     </section>
 

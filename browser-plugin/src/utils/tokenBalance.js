@@ -62,6 +62,20 @@ export async function readNinkBalance(walletAddress, rpcUrl = resolveRpcUrl()) {
   return decodeUint256(result);
 }
 
+export async function readNinkAllowance(ownerAddress, spenderAddress, rpcUrl = resolveRpcUrl()) {
+  if (!NINK_CHAIN_CONFIG.tokenAddress || !ownerAddress || !spenderAddress || !rpcUrl) {
+    return null;
+  }
+
+  const data = `0xdd62ed3e${padAddress(ownerAddress)}${padAddress(spenderAddress)}`;
+  const result = await rpcCall(rpcUrl, "eth_call", [
+    { to: NINK_CHAIN_CONFIG.tokenAddress, data },
+    "latest",
+  ]);
+
+  return decodeUint256(result);
+}
+
 export async function readAnchorFee(rpcUrl = resolveRpcUrl()) {
   if (!NINK_CHAIN_CONFIG.registryAddress || !rpcUrl) {
     return null;

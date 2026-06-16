@@ -136,6 +136,28 @@ body {
   background: rgba(61, 214, 140, 0.05);
 }
 
+.wallet-connect-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.wallet-connect-btn,
+.wallet-disconnect-btn {
+  margin-top: 0;
+  flex: 1;
+}
+
+.wallet-disconnect-btn {
+  border-color: rgba(255, 107, 107, 0.45);
+  color: #ffb4b4;
+}
+
+.wallet-disconnect-btn:hover {
+  border-color: var(--danger);
+  color: #ffe0e0;
+}
+
 .onchain-note {
   margin: 10px 0 0;
   font-size: 0.75rem;

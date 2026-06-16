@@ -41,6 +41,31 @@
     return null;
   }
 
+  async function sendContractTx(ethereum, from, to, data) {
+    const sendResult = await ethereum.request({
+      method: "eth_sendTransaction",
+      params: [
+        {
+          from,
+          to,
+          data,
+        },
+      ],
+    });
+
+    const txHash = normalizeTxHash(sendResult);
+    if (!txHash) {
+      throw new Error("MetaMask did not return a transaction hash.");
+    }
+
+    const receipt = await waitForReceipt(ethereum, txHash, 60, 500);
+    if (!receipt) {
+      throw new Error("Transaction was sent but no receipt arrived in time.");
+    }
+
+    return receipt;
+  }
+
   window.__ninkAnchorProof = async function ninkAnchorProof(params) {
     const ethereum = getEthereumProvider();
     if (!ethereum) {
@@ -69,29 +94,32 @@
       throw new Error("MetaMask is installed but no account is selected.");
     }
 
-    const sendResult = await ethereum.request({
-      method: "eth_sendTransaction",
-      params: [
-        {
-          from,
-          to: params.registryAddress,
-          data: params.callData,
-        },
-      ],
-    });
-
-    const txHash = normalizeTxHash(sendResult);
-    if (!txHash) {
-      throw new Error("MetaMask did not return a transaction hash.");
+    if (params.approveCallData && params.tokenAddress) {
+      await sendContractTx(ethereum, from, params.tokenAddress, params.approveCallData);
     }
 
-    const receipt = await waitForReceipt(ethereum, txHash, 60, 500);
-    const blockNumber = receipt ? parseInt(receipt.blockNumber, 16) : null;
+    const anchorCallData = params.anchorCallData || params.callData;
+    if (!anchorCallData || !params.registryAddress) {
+      throw new Error("Missing anchor transaction data.");
+    }
+
+    const anchorReceipt = await sendContractTx(
+      ethereum,
+      from,
+      params.registryAddress,
+      anchorCallData
+    );
+
     const payload = JSON.stringify({
-      transactionHash: normalizeTxHash(receipt && receipt.transactionHash) || txHash,
-      blockNumber,
+      transactionHash:
+        normalizeTxHash(anchorReceipt.transactionHash) ||
+        normalizeTxHash(anchorReceipt.hash),
+      blockNumber: anchorReceipt.blockNumber
+        ? parseInt(anchorReceipt.blockNumber, 16)
+        : null,
       validatorAddress: from,
       chainId,
+      registryAddress: params.registryAddress,
     });
 
     document.documentElement.setAttribute("data-nink-anchor-result", payload);
