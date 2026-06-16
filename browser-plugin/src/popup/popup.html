@@ -13,13 +13,32 @@
         <h1>Project NINK Proof Anchor</h1>
         <span id="dev-mode-badge" class="dev-badge" hidden>[Local Dev Mode]</span>
       </div>
-      <p class="subtitle">Local encryption and L2 session anchoring</p>
+      <p class="subtitle">Sign off AI sessions with your NINK account</p>
     </header>
 
-    <label class="dev-toggle">
-      <input id="dev-stub-toggle" type="checkbox">
-      <span>Mock mode — skip blockchain entirely (fastest testing)</span>
-    </label>
+    <section id="account-panel" class="metrics-card account-panel" aria-live="polite">
+      <div id="account-logged-out">
+        <p class="panel-intro">Sign in to use your NINK balance. No MetaMask required.</p>
+        <label class="login-field">
+          <span class="login-label">Email</span>
+          <input id="login-email-input" type="email" placeholder="you@example.com" autocomplete="username">
+        </label>
+        <button id="login-stub-btn" type="button" class="secondary-btn login-btn">Sign in</button>
+      </div>
+      <div id="account-logged-in" hidden>
+        <div class="metric-row">
+          <span class="metric-label">Your NINK</span>
+          <span class="metric-value"><span id="account-balance-display">—</span></span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Cost per sign-off</span>
+          <span class="metric-value"><span id="account-fee-display">—</span> NINK</span>
+        </div>
+        <p id="account-session-label" class="onchain-note"></p>
+        <p id="account-source-label" class="onchain-note"></p>
+        <button id="logout-stub-btn" type="button" class="secondary-btn wallet-disconnect-btn">Sign out</button>
+      </div>
+    </section>
 
     <section id="onchain-panel" class="metrics-card onchain-panel" aria-live="polite" hidden>
       <div class="metric-row">
@@ -38,7 +57,7 @@
       <p id="chain-health-label" class="onchain-note"></p>
     </section>
 
-    <section class="metrics-card" aria-live="polite" id="mock-metrics-panel">
+    <section class="metrics-card" aria-live="polite" id="mock-metrics-panel" hidden>
       <div class="metric-row">
         <span class="metric-label">Balance</span>
         <span class="metric-value"><span id="balance-display">0.0000</span> NINK</span>
@@ -50,7 +69,19 @@
     </section>
 
     <button id="sign-off-btn" type="button">Press NINK to Sign-Off</button>
-    <button id="wallet-setup-btn" type="button" class="secondary-btn" hidden>Advanced: MetaMask setup (optional)</button>
+
+    <details id="advanced-section" class="advanced-section">
+      <summary>Advanced options</summary>
+      <label class="dev-toggle">
+        <input id="wallet-mode-toggle" type="checkbox">
+        <span>Use MetaMask wallet (developers)</span>
+      </label>
+      <label class="dev-toggle">
+        <input id="dev-stub-toggle" type="checkbox">
+        <span>Mock mode — skip blockchain entirely</span>
+      </label>
+    </details>
+
     <div id="status-console" class="status-console" role="status"></div>
   </main>
 

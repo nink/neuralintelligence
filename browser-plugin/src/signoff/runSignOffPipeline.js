@@ -14,16 +14,13 @@ import {
   resolvePlatformIdFromTab,
 } from "../utils/web3Bridge.js";
 import { NINK_CHAIN_CONFIG } from "../config/chainConfig.js";
+import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
 import { getOnChainWalletSnapshot, readChainHealth } from "../utils/tokenBalance.js";
 
 const CONTENT_SCRIPT_PATHS = [
   "src/config/chatPlatforms.global.js",
   "src/content/scrapers.js",
 ];
-
-function isLocalHardhatChain() {
-  return Number(NINK_CHAIN_CONFIG.chainId) === 31337;
-}
 
 function readLocalStorage(keys) {
   return new Promise((resolve, reject) => {
@@ -391,13 +388,16 @@ async function resolveAnchorReceipt(stateHash, appliedFee, useDevStubs) {
 }
 
 export async function validateSignOffReady(useDevStubs, chatTabId) {
-  const stored = await readLocalStorage(["accounting", "connectedWallet"]);
+  const stored = await readLocalStorage([
+    "accounting",
+    "connectedWallet",
+    "ninkConfig",
+    "ninkSession",
+  ]);
+  const config = { ...DEFAULT_NINK_CONFIG, ...stored.ninkConfig };
+  const useWalletMode = Boolean(config.useWalletMode);
   const accounting = stored.accounting;
   const connectedAddress = stored.connectedWallet?.address || null;
-
-  if (!accounting) {
-    throw new Error("Accounting data not ready. Close and reopen the popup.");
-  }
 
   const tab = await getChatTabById(chatTabId);
   if (!isSupportedChatTab(tab)) {
@@ -407,48 +407,74 @@ export async function validateSignOffReady(useDevStubs, chatTabId) {
   }
 
   if (useDevStubs) {
+    if (!accounting) {
+      throw new Error("Accounting data not ready. Close and reopen the popup.");
+    }
     if (!hasSufficientBalance(accounting.userBalance, accounting.requiredFee)) {
       throw new Error(
         `Insufficient funds. Required: ${formatTokenForDisplay(accounting.requiredFee)}, Available: ${formatTokenForDisplay(accounting.userBalance)}`
       );
     }
-    return { tab, connectedAddress: null };
+    return { tab, connectedAddress: null, useWalletMode: false };
   }
 
-  if (!connectedAddress) {
-    throw new Error("Connect your wallet before sign-off.");
+  if (useWalletMode) {
+    if (!connectedAddress) {
+      throw new Error("Connect your wallet before sign-off.");
+    }
+
+    const health = await readChainHealth();
+    if (!health.ok) {
+      throw new Error(
+        health.reason === "rpc-unreachable" || health.reason?.includes("fetch")
+          ? "Local Hardhat chain is not running. Start: npx hardhat node"
+          : `Local chain not ready (${health.reason || "unknown"}). Redeploy contracts.`
+      );
+    }
+
+    const snapshot = await getOnChainWalletSnapshot(connectedAddress);
+    if (!snapshot.ok || !hasSufficientBalance(snapshot.balanceWei, snapshot.anchorFeeWei)) {
+      throw new Error(
+        `Insufficient on-chain NINK. Required: ${snapshot.anchorFeeFormatted || "?"} NINK, Available: ${snapshot.balanceFormatted || "0"} NINK`
+      );
+    }
+
+    return { tab, connectedAddress, useWalletMode: true };
   }
 
-  const health = await readChainHealth();
-  if (!health.ok) {
+  if (!stored.ninkSession?.userId) {
+    throw new Error("Sign in to your NINK account first.");
+  }
+
+  if (!accounting) {
+    throw new Error("Balance not loaded yet. Wait a moment and try again.");
+  }
+
+  if (!hasSufficientBalance(accounting.userBalance, accounting.requiredFee)) {
     throw new Error(
-      health.reason === "rpc-unreachable" || health.reason?.includes("fetch")
-        ? "Local Hardhat chain is not running. Start: npx hardhat node"
-        : `Local chain not ready (${health.reason || "unknown"}). Redeploy contracts.`
+      `Insufficient NINK. Required: ${formatTokenForDisplay(accounting.requiredFee)}, Available: ${formatTokenForDisplay(accounting.userBalance)}`
     );
   }
 
-  const snapshot = await getOnChainWalletSnapshot(connectedAddress);
-  if (!snapshot.ok || !hasSufficientBalance(snapshot.balanceWei, snapshot.anchorFeeWei)) {
-    throw new Error(
-      `Insufficient on-chain NINK. Required: ${snapshot.anchorFeeFormatted || "?"} NINK, Available: ${snapshot.balanceFormatted || "0"} NINK`
-    );
-  }
-
-  return { tab, connectedAddress };
+  return { tab, connectedAddress: null, useWalletMode: false };
 }
 
 export async function executeSignOff(useDevStubs, chatTabId, onStatus) {
-  const { tab, connectedAddress } = await validateSignOffReady(useDevStubs, chatTabId);
-  const stored = await readLocalStorage(["accounting"]);
+  const { tab, connectedAddress, useWalletMode } = await validateSignOffReady(
+    useDevStubs,
+    chatTabId
+  );
+  const stored = await readLocalStorage(["accounting", "ninkSession"]);
   const accounting = stored.accounting;
 
-  if (!useDevStubs && isLocalHardhatChain()) {
+  if (useWalletMode) {
     onStatus?.(
       "Keep this window open. Confirm each MetaMask prompt on your chat tab (approve, then anchor)…"
     );
-  } else {
+  } else if (useDevStubs) {
     onStatus?.("Capturing and encrypting session…");
+  } else {
+    onStatus?.("Capturing and encrypting session… NINK cloud will anchor when ready.");
   }
 
   const tabVideoRecorder = new TabVideoRecorder();
@@ -536,7 +562,7 @@ export async function executeSignOff(useDevStubs, chatTabId, onStatus) {
     );
     sessionData.signOffContext.identityProofAddress = "0xUserWallet";
     sessionData.signOffContext.anchorMethod = chainReceipt.source || "local-dev-fallback";
-  } else {
+  } else if (useWalletMode) {
     onStatus?.("Waiting for MetaMask on your chat tab…");
     const anchorResult = await anchorSessionToLedger(
       stateHash,
@@ -558,6 +584,24 @@ export async function executeSignOff(useDevStubs, chatTabId, onStatus) {
     sessionData.signOffContext.anchorMethod = anchorResult.anchorMethod || "metamask-tab";
     sessionData.signOffContext.onChainTransactionHash = anchorResult.transactionHash;
     sessionData.signOffContext.registryAddress = anchorResult.registryAddress;
+    sessionData.signOffContext.platformId = platformId;
+    sessionData.signOffContext.anchorTimestamp = anchorTimestamp;
+  } else {
+    onStatus?.("Anchoring via NINK cloud…");
+    const receipt = await resolveAnchorReceipt(stateHash, accounting.requiredFee, false);
+    chainReceipt = {
+      txHash: receipt.txHash,
+      blockNumber: receipt.blockNumber ?? null,
+      registryAddress: NINK_CHAIN_CONFIG.registryAddress || null,
+      validatorAddress: stored.ninkSession?.userId || "nink-account",
+      chainId: NINK_CHAIN_CONFIG.chainId ?? null,
+      source: receipt.source || "nink-cloud-relayer",
+      isLocalDevMode: false,
+    };
+    sessionData.signOffContext.identityProofAddress = stored.ninkSession?.userId || "nink-account";
+    sessionData.signOffContext.anchorMethod = receipt.source || "nink-cloud-relayer";
+    sessionData.signOffContext.onChainTransactionHash = receipt.txHash;
+    sessionData.signOffContext.registryAddress = NINK_CHAIN_CONFIG.registryAddress || null;
     sessionData.signOffContext.platformId = platformId;
     sessionData.signOffContext.anchorTimestamp = anchorTimestamp;
   }
@@ -605,7 +649,9 @@ export async function executeSignOff(useDevStubs, chatTabId, onStatus) {
       version: `NINK-V${chrome.runtime.getManifest().version}`,
       blockchainNetwork: useDevStubs
         ? "Base-Sepolia-Mock"
-        : `chain-${chainReceipt.chainId ?? NINK_CHAIN_CONFIG.chainId ?? "unknown"}`,
+        : useWalletMode
+          ? `chain-${chainReceipt.chainId ?? NINK_CHAIN_CONFIG.chainId ?? "unknown"}`
+          : "NINK-Cloud",
       timestamp: anchoredAt,
       sourcePlatform: sessionData.sourcePlatform,
       platformId,

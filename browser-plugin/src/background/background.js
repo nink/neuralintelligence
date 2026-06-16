@@ -1,6 +1,7 @@
 import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
 import {
   LOCAL_DEV_ACCOUNTING,
+  STUB_ACCOUNT_ACCOUNTING,
   createMockAnchorReceipt,
 } from "../utils/devStubs.js";
 import {
@@ -12,8 +13,8 @@ import { getOnChainWalletSnapshot } from "../utils/tokenBalance.js";
 import {
   readMetaMaskAddressOnTab,
 } from "../utils/walletTokenUi.js";
-const PRODUCTION_ACCOUNTING_URL =
-  "https://api.nink.network/v1/accounting/parameters?user=0xUserWallet";
+const PRODUCTION_ACCOUNTING_BASE =
+  "https://api.nink.network/v1/accounting/parameters";
 const PRODUCTION_ANCHOR_URL = "https://api.nink.network/v1/blockchain/anchor";
 
 let systemAccountingState = { ...LOCAL_DEV_ACCOUNTING };
@@ -53,7 +54,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 fetchAccountingParameters();
 
 async function fetchAccountingParameters() {
-  const config = await getNinkConfig();
+  const stored = await chrome.storage.local.get(["ninkConfig", "ninkSession"]);
+  const config = { ...DEFAULT_NINK_CONFIG, ...stored.ninkConfig };
 
   if (config.useDevStubs) {
     await applyAccountingState({
@@ -63,8 +65,21 @@ async function fetchAccountingParameters() {
     return;
   }
 
+  if (config.useWalletMode) {
+    await chrome.storage.local.remove("accounting");
+    return;
+  }
+
+  const session = stored.ninkSession;
+  if (!session?.userId) {
+    await chrome.storage.local.remove("accounting");
+    return;
+  }
+
+  const accountingUrl = `${PRODUCTION_ACCOUNTING_BASE}?user=${encodeURIComponent(session.userId)}`;
+
   try {
-    const response = await fetch(PRODUCTION_ACCOUNTING_URL);
+    const response = await fetch(accountingUrl);
     if (!response.ok) {
       throw new Error(`Accounting API returned ${response.status}`);
     }
@@ -78,10 +93,10 @@ async function fetchAccountingParameters() {
     });
   } catch (error) {
     console.warn(
-      "api.nink.network unreachable. Falling back to local developer test parameters.",
+      "api.nink.network unreachable. Using stub NINK account balance for signed-in user.",
       error
     );
-    await applyAccountingState(LOCAL_DEV_ACCOUNTING);
+    await applyAccountingState(STUB_ACCOUNT_ACCOUNTING);
   }
 }
 
@@ -157,6 +172,68 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       sendResponse({ status: "SUCCESS", config: nextConfig });
     })().catch((error) => {
       sendResponse({ status: "ERROR", message: error.toString() });
+    });
+    return true;
+  }
+
+  if (request.action === "SET_WALLET_MODE") {
+    (async () => {
+      const current = await getNinkConfig();
+      const nextConfig = {
+        ...current,
+        useWalletMode: Boolean(request.useWalletMode),
+        useDevStubs: request.useWalletMode ? false : current.useDevStubs,
+      };
+      await chrome.storage.local.set({ ninkConfig: nextConfig });
+      await fetchAccountingParameters();
+      sendResponse({ status: "SUCCESS", config: nextConfig });
+    })().catch((error) => {
+      sendResponse({ status: "ERROR", message: error.toString() });
+    });
+    return true;
+  }
+
+  if (request.action === "REFRESH_ACCOUNTING") {
+    (async () => {
+      await fetchAccountingParameters();
+      sendResponse({ status: "SUCCESS" });
+    })().catch((error) => {
+      sendResponse({ status: "ERROR", message: error.message || String(error) });
+    });
+    return true;
+  }
+
+  if (request.action === "LOGOUT_NINK_ACCOUNT") {
+    (async () => {
+      await chrome.storage.local.remove(["ninkSession", "accounting"]);
+      sendResponse({ status: "SUCCESS" });
+    })().catch((error) => {
+      sendResponse({ status: "ERROR", message: error.message || String(error) });
+    });
+    return true;
+  }
+
+  if (request.action === "LOGIN_NINK_ACCOUNT") {
+    (async () => {
+      const email = String(request.email || "").trim().toLowerCase();
+      if (!email || !email.includes("@")) {
+        sendResponse({ status: "ERROR", message: "Enter a valid email address." });
+        return;
+      }
+
+      await chrome.storage.local.set({
+        ninkSession: {
+          userId: email,
+          email,
+          displayName: email.split("@")[0] || "user",
+          loggedInAt: new Date().toISOString(),
+          stub: true,
+        },
+      });
+      await fetchAccountingParameters();
+      sendResponse({ status: "SUCCESS" });
+    })().catch((error) => {
+      sendResponse({ status: "ERROR", message: error.message || String(error) });
     });
     return true;
   }

@@ -136,6 +136,65 @@ body {
   background: rgba(61, 214, 140, 0.05);
 }
 
+.advanced-section {
+  margin-top: 14px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.advanced-section summary {
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 8px;
+}
+
+.advanced-section[open] summary {
+  margin-bottom: 10px;
+}
+
+.account-panel {
+  border-color: rgba(79, 140, 255, 0.35);
+  background: rgba(79, 140, 255, 0.06);
+}
+
+.panel-intro {
+  margin: 0 0 12px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.login-label {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.login-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.login-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.login-btn {
+  margin-top: 0;
+}
+
 .wallet-connect-row {
   display: flex;
   gap: 8px;

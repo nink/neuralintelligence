@@ -12,6 +12,14 @@ export const LOCAL_DEV_ACCOUNTING = {
   isLocalDevMode: true,
 };
 
+/** Demo balance when api.nink.network is unreachable but user is signed in. */
+export const STUB_ACCOUNT_ACCOUNTING = {
+  balance: MOCK_BALANCE_WEI,
+  feeRequirement: MOCK_FEE_WEI,
+  source: "nink-account-stub-fallback",
+  isLocalDevMode: false,
+};
+
 export function createMockAnchorReceipt() {
   const txHash =
     "0x" +

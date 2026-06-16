@@ -33,11 +33,27 @@ async function main() {
     return;
   }
 
+  const noteEl = document.getElementById("runner-note");
+  if (noteEl) {
+    if (params.useWalletMode) {
+      noteEl.textContent =
+        "Keep this window open. MetaMask prompts appear on your chat tab — confirm approve, then anchor. Save both files when Chrome asks.";
+    } else if (params.useDevStubs) {
+      noteEl.textContent =
+        "Keep this window open until both files save. Choose save locations when Chrome asks.";
+    } else {
+      noteEl.textContent =
+        "Keep this window open until both files save. No MetaMask needed — NINK cloud handles anchoring.";
+    }
+  }
+
   try {
     setRunnerStatus(
       params.useDevStubs
         ? "Capturing and encrypting session…"
-        : "Capturing session… MetaMask will ask you to confirm on your chat tab."
+        : params.useWalletMode
+          ? "Capturing session… MetaMask will ask you to confirm on your chat tab."
+          : "Capturing session… anchoring via your NINK account."
     );
 
     const result = await executeSignOff(params.useDevStubs, params.chatTabId, setRunnerStatus);

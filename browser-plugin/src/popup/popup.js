@@ -1,7 +1,6 @@
 import { hasSufficientBalance, formatTokenForDisplay } from "../utils/tokenMath.js";
 import { LOCAL_DEV_ACCOUNTING } from "../utils/devStubs.js";
 import { isSupportedChatUrl } from "../config/chatPlatforms.js";
-import { NINK_CHAIN_CONFIG } from "../config/chainConfig.js";
 import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
 import { getOnChainWalletSnapshot, readChainHealth } from "../utils/tokenBalance.js";
 import {
@@ -9,15 +8,83 @@ import {
   walletConnectErrorMessage,
 } from "../utils/walletTokenUi.js";
 import { validateSignOffReady } from "../signoff/runSignOffPipeline.js";
+import {
+  buildStubSession,
+  formatAccountLabel,
+  isValidStubEmail,
+} from "../utils/ninkAccount.js";
 
-function isLocalHardhatChain() {
-  return Number(NINK_CHAIN_CONFIG.chainId) === 31337;
+function getConfigFlags(ninkConfig = {}) {
+  return {
+    useDevStubs: ninkConfig.useDevStubs ?? DEFAULT_NINK_CONFIG.useDevStubs,
+    useWalletMode: ninkConfig.useWalletMode ?? DEFAULT_NINK_CONFIG.useWalletMode,
+  };
 }
 
-function setLocalDevModeIndicator(isLocalDevMode) {
+function setLocalDevModeIndicator(useDevStubs, useWalletMode) {
   const badge = document.getElementById("dev-mode-badge");
-  badge.hidden = !isLocalDevMode;
+  if (useDevStubs) {
+    badge.hidden = false;
+    badge.textContent = "[Mock Mode]";
+    return;
+  }
+  if (useWalletMode) {
+    badge.hidden = false;
+    badge.textContent = "[Wallet Mode]";
+    return;
+  }
+  badge.hidden = true;
 }
+
+async function refreshAccountPanel() {
+  const accountPanel = document.getElementById("account-panel");
+  const loggedOut = document.getElementById("account-logged-out");
+  const loggedIn = document.getElementById("account-logged-in");
+  const balanceEl = document.getElementById("account-balance-display");
+  const feeEl = document.getElementById("account-fee-display");
+  const sessionLabel = document.getElementById("account-session-label");
+  const sourceLabel = document.getElementById("account-source-label");
+  const signOffButton = document.getElementById("sign-off-btn");
+
+  accountPanel.hidden = false;
+
+  const stored = await readLocalStorage(["accounting", "ninkSession"]);
+  const session = stored.ninkSession;
+  const accounting = stored.accounting;
+
+  if (!session?.userId) {
+    loggedOut.hidden = false;
+    loggedIn.hidden = true;
+    signOffButton.disabled = true;
+    return;
+  }
+
+  loggedOut.hidden = true;
+  loggedIn.hidden = false;
+  sessionLabel.textContent = formatAccountLabel(session);
+
+  if (!accounting) {
+    balanceEl.textContent = "Loading…";
+    feeEl.textContent = "—";
+    sourceLabel.textContent = "Fetching balance from NINK…";
+    signOffButton.disabled = true;
+    return;
+  }
+
+  balanceEl.textContent = `${formatTokenForDisplay(accounting.userBalance)} NINK`;
+  feeEl.textContent = formatTokenForDisplay(accounting.requiredFee);
+  sourceLabel.textContent =
+    accounting.source === "production-api"
+      ? "Balance from your NINK account."
+      : "Demo balance (NINK cloud API not reachable yet).";
+
+  signOffButton.disabled = !hasSufficientBalance(
+    accounting.userBalance,
+    accounting.requiredFee
+  );
+}
+
+async function refreshOnChainWalletPanel() {
 
 function readLocalStorage(keys) {
   return new Promise((resolve, reject) => {
@@ -88,12 +155,11 @@ async function refreshOnChainWalletPanel() {
   const disconnectBtn = document.getElementById("disconnect-wallet-btn");
 
   const stored = await readLocalStorage(["ninkConfig", "connectedWallet"]);
-  const useDevStubs = stored.ninkConfig?.useDevStubs ?? DEFAULT_NINK_CONFIG.useDevStubs;
+  const { useDevStubs, useWalletMode } = getConfigFlags(stored.ninkConfig || {});
   const connectedAddress = stored.connectedWallet?.address || null;
 
-  if (useDevStubs) {
+  if (useDevStubs || !useWalletMode) {
     onchainPanel.hidden = true;
-    mockPanel.hidden = false;
     return;
   }
 
@@ -173,11 +239,16 @@ function shortAddress(address) {
 
 async function updateUI() {
   try {
-    const stored = await readLocalStorage(["accounting", "ninkConfig"]);
+    const stored = await readLocalStorage(["accounting", "ninkConfig", "ninkSession"]);
     const accounting = stored.accounting;
-    const useDevStubs = stored.ninkConfig?.useDevStubs ?? DEFAULT_NINK_CONFIG.useDevStubs;
+    const { useDevStubs, useWalletMode } = getConfigFlags(stored.ninkConfig || {});
 
     document.getElementById("dev-stub-toggle").checked = useDevStubs;
+    document.getElementById("wallet-mode-toggle").checked = useWalletMode;
+
+    document.getElementById("account-panel").hidden = useDevStubs || useWalletMode;
+    document.getElementById("onchain-panel").hidden = !useWalletMode || useDevStubs;
+    document.getElementById("mock-metrics-panel").hidden = !useDevStubs;
 
     if (useDevStubs) {
       if (accounting) {
@@ -191,17 +262,18 @@ async function updateUI() {
 
       document.getElementById("sign-off-btn").disabled = accounting
         ? !hasSufficientBalance(accounting.userBalance, accounting.requiredFee)
-        : false;
-    } else {
+        : true;
+    } else if (useWalletMode) {
       await refreshOnChainWalletPanel();
+    } else {
+      await refreshAccountPanel();
     }
 
-    setLocalDevModeIndicator(useDevStubs);
+    setLocalDevModeIndicator(useDevStubs, useWalletMode);
   } catch (error) {
-    const healthLabel = document.getElementById("chain-health-label");
-    if (healthLabel) {
-      healthLabel.textContent = error.message || "UI update failed";
-      healthLabel.className = "onchain-note chain-health-bad";
+    const statusConsole = document.getElementById("status-console");
+    if (statusConsole && !statusConsole.textContent) {
+      statusConsole.innerText = error.message || "UI update failed";
     }
   }
 }
@@ -210,9 +282,59 @@ updateUI();
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (
     areaName === "local" &&
-    (changes.accounting || changes.ninkConfig || changes.connectedWallet)
+    (changes.accounting ||
+      changes.ninkConfig ||
+      changes.connectedWallet ||
+      changes.ninkSession)
   ) {
     updateUI();
+  }
+});
+
+async function loginStubFromPopup() {
+  const statusConsole = document.getElementById("status-console");
+  const loginBtn = document.getElementById("login-stub-btn");
+  const email = document.getElementById("login-email-input").value;
+
+  if (!isValidStubEmail(email)) {
+    statusConsole.innerText = "Error: Enter a valid email address.";
+    return;
+  }
+
+  try {
+    loginBtn.disabled = true;
+    statusConsole.innerText = "Signing in…";
+
+    const response = await sendBackgroundMessage({
+      action: "LOGIN_NINK_ACCOUNT",
+      email,
+    });
+
+    if (response?.status !== "SUCCESS") {
+      throw new Error(response?.message || "Sign-in failed.");
+    }
+
+    statusConsole.innerText = `Signed in as ${buildStubSession(email).email}`;
+  } catch (error) {
+    statusConsole.innerText = `Error: ${error.message}`;
+  } finally {
+    loginBtn.disabled = false;
+    updateUI();
+  }
+}
+
+async function logoutStubFromPopup() {
+  const statusConsole = document.getElementById("status-console");
+  await sendBackgroundMessage({ action: "LOGOUT_NINK_ACCOUNT" });
+  statusConsole.innerText = "Signed out.";
+  updateUI();
+}
+
+document.getElementById("login-stub-btn").addEventListener("click", loginStubFromPopup);
+document.getElementById("logout-stub-btn").addEventListener("click", logoutStubFromPopup);
+document.getElementById("login-email-input").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    loginStubFromPopup();
   }
 });
 
@@ -268,9 +390,17 @@ document.getElementById("dev-stub-toggle").addEventListener("change", async (eve
   const statusConsole = document.getElementById("status-console");
 
   try {
+    const stored = await readLocalStorage(["ninkConfig"]);
+    const current = stored.ninkConfig || {};
+
     if (useDevStubs) {
       await chrome.storage.local.set({
-        ninkConfig: { useDevStubs: true },
+        ninkConfig: {
+          ...DEFAULT_NINK_CONFIG,
+          ...current,
+          useDevStubs: true,
+          useWalletMode: false,
+        },
         accounting: {
           userBalance: LOCAL_DEV_ACCOUNTING.balance,
           requiredFee: LOCAL_DEV_ACCOUNTING.feeRequirement,
@@ -279,7 +409,13 @@ document.getElementById("dev-stub-toggle").addEventListener("change", async (eve
         },
       });
     } else {
-      await chrome.storage.local.set({ ninkConfig: { useDevStubs: false } });
+      await chrome.storage.local.set({
+        ninkConfig: {
+          ...DEFAULT_NINK_CONFIG,
+          ...current,
+          useDevStubs: false,
+        },
+      });
       await sendBackgroundMessage({ action: "SET_DEV_STUB_MODE", useDevStubs: false });
     }
     statusConsole.innerText = "";
@@ -290,8 +426,28 @@ document.getElementById("dev-stub-toggle").addEventListener("change", async (eve
   }
 });
 
-document.getElementById("wallet-setup-btn").addEventListener("click", () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL("wallet-setup.html") });
+document.getElementById("wallet-mode-toggle").addEventListener("change", async (event) => {
+  const useWalletMode = event.target.checked;
+  const statusConsole = document.getElementById("status-console");
+
+  try {
+    const response = await sendBackgroundMessage({
+      action: "SET_WALLET_MODE",
+      useWalletMode,
+    });
+
+    if (response?.status !== "SUCCESS") {
+      throw new Error(response?.message || "Could not switch wallet mode.");
+    }
+
+    statusConsole.innerText = useWalletMode
+      ? "Wallet mode enabled — connect MetaMask below Advanced options."
+      : "Wallet mode off — sign in with your NINK account.";
+  } catch (error) {
+    statusConsole.innerText = `Error: ${error.message}`;
+  } finally {
+    updateUI();
+  }
 });
 
 let signOffInProgress = false;
@@ -304,6 +460,7 @@ document.getElementById("sign-off-btn").addEventListener("click", async () => {
   const consoleLog = document.getElementById("status-console");
   const signOffButton = document.getElementById("sign-off-btn");
   const useDevStubs = document.getElementById("dev-stub-toggle").checked;
+  const useWalletMode = document.getElementById("wallet-mode-toggle").checked;
 
   signOffInProgress = true;
   signOffButton.disabled = true;
@@ -315,6 +472,7 @@ document.getElementById("sign-off-btn").addEventListener("click", async () => {
     await chrome.storage.local.set({
       signOffParams: {
         useDevStubs,
+        useWalletMode,
         chatTabId: tab.id,
         startedAt: new Date().toISOString(),
       },
@@ -328,8 +486,16 @@ document.getElementById("sign-off-btn").addEventListener("click", async () => {
       focused: true,
     });
 
-    consoleLog.innerText =
-      "Sign-off window opened — keep it open, confirm MetaMask on your chat tab, then choose where to save both files.";
+    if (useDevStubs) {
+      consoleLog.innerText =
+        "Sign-off window opened — choose where to save your .nink and .ninkkey files.";
+    } else if (useWalletMode) {
+      consoleLog.innerText =
+        "Sign-off window opened — keep it open, confirm MetaMask on your chat tab, then save both files.";
+    } else {
+      consoleLog.innerText =
+        "Sign-off window opened — keep it open until both files are saved.";
+    }
   } catch (error) {
     consoleLog.innerText = `Error: ${error.message}`;
   } finally {
