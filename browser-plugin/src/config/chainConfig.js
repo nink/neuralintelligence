@@ -6,7 +6,7 @@ export const NINK_CHAIN_CONFIG = {
   treasury: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   deployer: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   anchorFeeWei: "10000000000000000",
-  deployedAt: "2026-06-16T03:34:50.729Z",
+  deployedAt: "2026-06-16T16:47:35.085Z",
 };
 
 export const NINK_TOKEN_ABI = [

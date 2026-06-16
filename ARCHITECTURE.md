@@ -27,6 +27,12 @@
 
 **Rule:** Raw conversation text and attachment bytes never leave the browser unencrypted.
 
+## Billing rails (June 2026 pivot)
+
+Project NINK uses a **dual-rail** billing model: default users spend **virtual NINK** (PostgreSQL ledger, card-funded, closed-loop); Advanced users and agents use **issued NINK** on Base L2 after KYC. Session capture, encryption, and the Viewer are shared.
+
+See [`PIVOT-DUAL-RAIL.md`](PIVOT-DUAL-RAIL.md) and [`LAUNCH-GATES.md`](LAUNCH-GATES.md). Pre-pivot code: git tag `pre-dual-rail-2026-06`.
+
 ## Package layers
 
 ### Outer `.nink` (JSON envelope)

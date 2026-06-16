@@ -5,7 +5,8 @@ import {
 } from "../src/utils/devStubs.js";
 import { formatTokenForDisplay } from "../src/utils/tokenMath.js";
 
-const PORT = Number(process.env.NINK_STUB_PORT || 8787);
+/** Legacy stub — superseded by packages/api (port 8787). Kept on 8786 to avoid conflicts. */
+const PORT = Number(process.env.NINK_STUB_PORT || 8786);
 const HOST = process.env.NINK_STUB_HOST || "127.0.0.1";
 
 function sendJson(res, statusCode, payload) {
@@ -76,7 +77,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`NINK dev stub server listening on http://${HOST}:${PORT}`);
+  console.warn("DEPRECATED: use packages/api on port 8787 instead of this legacy stub.");
+  console.log(`NINK legacy stub server listening on http://${HOST}:${PORT}`);
   console.log(`  Balance: ${formatTokenForDisplay(LOCAL_DEV_ACCOUNTING.balance)} NINK`);
   console.log(`  Fee: ${formatTokenForDisplay(LOCAL_DEV_ACCOUNTING.feeRequirement)} NINK`);
 });

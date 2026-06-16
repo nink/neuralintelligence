@@ -42,8 +42,7 @@ Chrome Manifest V3 extension that:
 4. Decrypt in the viewer: serve `browser-plugin/` over HTTP (not `file://`) and drop `.nink` + `.ninkkey`
 
 ```powershell
-node browser-plugin/scripts/dev-stub-server.mjs   # legacy stub (superseded by packages/api)
-cd packages/api && npm install && npm run dev     # Gate 4 local cloud API
+cd packages/api && npm install && npm run dev     # Gate 4 / Rail 1 API prototype (see PIVOT-DUAL-RAIL.md)
 ```
 
 ### Session audit payload (encrypted)
@@ -68,7 +67,8 @@ See [`browser-plugin/README.md`](browser-plugin/README.md) for version and schem
 neuralintelligence/
 ├── README.md                 # This file
 ├── ARCHITECTURE.md           # Session model + trust boundaries
-├── LAUNCH-GATES.md           # Pre-launch checklist
+├── LAUNCH-GATES.md           # Pre-launch checklist (dual-rail)
+├── PIVOT-DUAL-RAIL.md        # Billing pivot plan + recovery tag
 ├── packages/
 │   ├── api/                  # Gate 4 — auth, accounting, anchor relayer
 │   └── contracts/            # NINK token + registry (Hardhat)

@@ -1,79 +1,132 @@
-# NINK launch gates
+# NINK launch gates (dual-rail)
 
-Do **not** launch mainnet until every gate passes. Local Hardhat quirks (MetaMask not listing tokens) are **not** launch blockers if the gates below pass.
+Do **not** launch public Rail 1 or Rail 2 until the relevant gates pass. See [`PIVOT-DUAL-RAIL.md`](PIVOT-DUAL-RAIL.md) for architecture and [`pre-dual-rail-2026-06`](https://github.com/nink/neuralintelligence/tree/pre-dual-rail-2026-06) for the archived single-rail prototype.
 
-## Gate 1 — Contract truth (automated)
-
-- [ ] `npx hardhat test` — all green
-- [ ] Token: exactly 100M NINK minted once, no mint functions
-- [ ] Registry: `anchorFee` starts at 0.01 NINK, `setAnchorFee` owner-only
-- [ ] `anchorState` pulls fee via `transferFrom` and emits `AnchorRecorded`
-
-## Gate 2 — In-app balance (default: NINK account)
-
-- [ ] Extension popup shows **Your NINK** from signed-in account (API or stub fallback)
-- [ ] Sign-off fee shown before sign-off
-- [ ] Sign-off disabled when balance &lt; fee
-- [ ] Stub login replaced with real auth before public launch
-
-## Gate 2b — In-app balance (advanced: wallet mode)
-
-- [ ] Extension shows **On-chain NINK** from `balanceOf` (token contract RPC)
-- [ ] Anchor fee shown from registry `anchorFee()`
-- [ ] Sign-off disabled when on-chain balance &lt; fee
-- [ ] Label states balance is from **contract**, not MetaMask UI
-
-## Gate 3 — Verify signed sessions
-
-- [x] Sign-off produces `.nink` + `.ninkkey` pair
-- [x] **Session Viewer** decrypts conversation and shows metadata (`stateHash`, `transactionHash`, network)
-- [x] Audit record / timeline renders for captured sessions
-
-## Gate 4 — NINK cloud backend (required for average users)
-
-- [x] `POST /v1/auth/login` — local API (`packages/api`); production auth TBD
-- [x] `GET /v1/accounting/parameters?user=` — live balance per account (local JSON store)
-- [x] `POST /v1/blockchain/anchor` — relayer returns real `transactionHash` when Hardhat running
-- [x] Sign-off deducts fee server-side (atomic with anchor)
-
-## Gate 5 — Public network deploy
-
-- [ ] Deploy `ProjectNinkToken` + `NinkRegistry` to target L2 (e.g. Base)
-- [ ] Verify both contracts on block explorer
-- [ ] Point relayer at production contracts
-- [ ] Submit token to explorer token list + CoinGecko / Uniswap list (post-audit)
-
-## Gate 6 — End-to-end sign-off (all modes)
-
-- [ ] Account mode: login → sign-off → viewer (no MetaMask)
-- [ ] Wallet mode: connect → approve → anchor → viewer
-- [ ] `.nink` envelope contains `transactionHash` + `stateHash`
-
-## Gate 7 — Ops
-
-- [ ] Treasury multisig (not single deployer key)
-- [ ] `setAnchorFee` runbook if NINK price moves
-- [ ] Monitoring: registry events, failed anchors, RPC health
+**Priority:** Complete **Rail 1** (virtual NINK, closed-loop) first. **Rail 2** new work is deferred; existing wallet/contract code is preserved on the archive branch.
 
 ---
 
-## What local MetaMask problems mean
+## Shared — Product & proof (both rails)
+
+### Gate S1 — Session capture & encryption
+
+- [x] Multi-platform chat scrape (ChatGPT, Gemini, Claude, etc.)
+- [x] Sign-off produces `.nink` + `.ninkkey` pair
+- [x] Capture inject without manual tab refresh (stable scraper)
+- [x] Sign-off runner + popup status sync
+
+### Gate S2 — Session Viewer
+
+- [x] Viewer decrypts conversation and shows metadata (`stateHash`, anchor proof fields)
+- [x] Audit record / timeline renders for captured sessions
+- [ ] Viewer displays Rail 1 `proofId` vs Rail 2 `transactionHash` distinctly (label polish)
+
+---
+
+## Rail 1 — Virtual NINK (default users) — **ship first**
+
+Closed-loop: card-funded **virtual NINK** in PostgreSQL. Same UI language (“NINK”, “0.01 NINK per sign-off”). **No on-chain mint** at purchase; **no wallet** in default UI.
+
+### Gate R1-A — Auth & account
+
+- [ ] Production auth (replace email-only stub)
+- [ ] Extension default path: sign in → **Your NINK** from virtual ledger API
+- [ ] Sign-out clears session reliably
+- [ ] Terms: virtual NINK usable only inside Project NINK until KYC conversion
+
+### Gate R1-B — Virtual balance & purchases
+
+- [ ] PostgreSQL schema: users, virtual balances, append-only ledger, purchases
+- [ ] Payment processor webhook ($20 NINK pack or equivalent)
+- [ ] `GET /v1/accounting/parameters` returns virtual NINK balance + fee (0.01 NINK)
+- [ ] Sign-off disabled when virtual balance &lt; fee
+
+### Gate R1-C — Debit on sign-off
+
+- [ ] `POST /v1/nink/debit-anchor` (or equivalent) atomically debits virtual NINK + records `proofId`
+- [ ] No blockchain call required for Rail 1 sign-off
+- [ ] `signOffContext` records rail=`virtual`, fee, `proofId`; Viewer shows proof
+
+### Gate R1-D — Compliance isolation
+
+- [ ] Default UI has no wallet, withdraw, transfer, P2P, or contract addresses
+- [ ] Advanced / wallet mode hidden or clearly labeled “issued NINK — requires KYC’d acquisition”
+- [ ] Closed-loop legal review signed off before public launch
+
+### Gate R1-E — End-to-end (Rail 1)
+
+- [ ] Buy virtual NINK → sign-off → Viewer verifies session
+- [ ] Balance decrements correctly per sign-off
+- [ ] Production API hosted (not localhost JSON store)
+
+---
+
+## Rail 2 — Issued NINK (Advanced + agents) — **after Rail 1**
+
+Open-loop: on-chain NINK on Base L2. KYC before mint/purchase from NINK or partner, or before virtual→issued conversion.
+
+### Gate R2-A — Contracts (preserved — minimal new work)
+
+- [ ] `npx hardhat test` — all green
+- [ ] Token: 100M NINK minted once; registry `anchorFee` 0.01 NINK
+- [ ] Deploy to Base Sepolia → mainnet; verify on explorer
+- [ ] *(Already prototyped on archive branch: wallet mode + local relayer)*
+
+### Gate R2-B — KYC & issuance
+
+- [ ] KYC provider integrated (human users)
+- [ ] Virtual → issued conversion: KYC → mint up to verified virtual balance → ledger debit
+- [ ] Direct token purchase from NINK/partner only after KYC
+
+### Gate R2-C — Advanced extension mode
+
+- [ ] MetaMask connect → on-chain balance → `anchorState` sign-off *(code exists on archive)*
+- [ ] Re-enable Advanced toggle for production with KYC-aware copy
+- [ ] Label: balance from **contract**, not MetaMask UI
+
+### Gate R2-D — Velocity & agent API
+
+- [ ] Wallet daily cap ≤ $100 USD-equiv NINK / 24h per address
+- [ ] IP aggregate cap ≤ $100 / 24h; cooldown on breach
+- [ ] API returns `VELOCITY_LIMIT_EXCEEDED` when limits hit
+- [ ] AI agent API keys + separate compliance onboarding
+
+### Gate R2-E — Ops
+
+- [ ] Treasury multisig (not single deployer key)
+- [ ] `setAnchorFee` runbook; monitoring (registry events, failed anchors, RPC)
+- [ ] MSB / LVCTR / STR runbooks (compliance ops)
+
+---
+
+## Archive — single-rail prototype (completed pre-pivot)
+
+The following were achieved on **`pre-dual-rail-2026-06`** / **`archive/single-rail-account-mode`** and should not be re-built from scratch:
+
+| Item | Status on archive |
+|------|-------------------|
+| Gate 3 viewer + sign-off loop | Done |
+| Gate 4 API skeleton (`packages/api`, local JSON store) | Done |
+| Account mode + popup login via API | Done |
+| Wallet Advanced mode + Mock mode | Done |
+| Hardhat contracts + relayer smoke test | Done |
+
+---
+
+## Build order
+
+1. ~~Shared product (Gates S1–S2 core)~~ — done on archive branch
+2. **Rail 1** — Gates R1-A through R1-E
+3. **Rail 2** — Gates R2-A through R2-E (reuse archived wallet/contract work)
+
+---
+
+## Local dev notes
 
 | Symptom | Launch risk? |
 |--------|----------------|
-| NINK not visible on Hardhat local | **No** — localhost is dev-only |
-| Hardhat console shows correct balance | Token contract OK |
-| Extension **Your NINK** panel correct (account mode) | **Primary user UX — required for launch** |
-| Extension **On-chain NINK** panel correct (wallet mode) | Required for advanced / audit path |
-| Token visible on Base Sepolia explorer + lists | Wallet discovery OK |
+| MetaMask NINK not visible on Hardhat | **No** — dev-only |
+| `packages/api` on port 8787 | Prototype for Rail 1 API shape; replace JSON with Postgres |
+| Legacy `dev-stub-server.mjs` on 8786 | Deprecated — do not use for Gate 4/Rail 1 |
 
-**Rule:** Ship when **extension account mode + viewer + relayer API** prove balances and sign-off. Wallet mode is optional for power users.
-
----
-
-## Next build order
-
-1. ~~**Gate 3** — viewer verification (done in extension UI)~~
-2. ~~**Gate 4** — NINK cloud API skeleton (auth, accounting, anchor)~~ — local dev at `packages/api`
-3. **Gate 5** — Base Sepolia deploy + relayer wired to testnet
-4. Buy flow + KYC (after Gate 4 production deploy)
+**Rule:** Ship Rail 1 when **virtual NINK purchase + debit sign-off + Viewer** pass Gates R1-* with counsel-approved closed-loop terms. Rail 2 is optional for power users and agents until KYC and velocity gates pass.

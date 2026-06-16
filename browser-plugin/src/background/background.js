@@ -29,6 +29,36 @@ function buildSessionAuthHeaders(session) {
   return headers;
 }
 
+async function verifyNinkApiHealth(apiBase) {
+  const response = await fetch(`${apiBase}/health`);
+  if (!response.ok) {
+    throw new Error(
+      `Gate 4 API not reachable at ${apiBase} (HTTP ${response.status}). Run: cd packages/api && npm run dev`
+    );
+  }
+
+  const data = await response.json().catch(() => ({}));
+  if (data.service !== "nink-api") {
+    throw new Error(
+      `Wrong server on ${apiBase}. Stop legacy dev-stub-server and run packages/api on port 8787.`
+    );
+  }
+
+  return data;
+}
+
+const SESSION_STORAGE_KEYS = [
+  "ninkSession",
+  "accounting",
+  "accountingError",
+  "signOffOutcome",
+  "signOffParams",
+];
+
+async function clearNinkSessionStorage() {
+  await chrome.storage.local.remove(SESSION_STORAGE_KEYS);
+}
+
 async function getNinkConfig() {
   const stored = await chrome.storage.local.get("ninkConfig");
   return { ...DEFAULT_NINK_CONFIG, ...stored.ninkConfig };
@@ -68,7 +98,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-fetchAccountingParameters();
+fetchAccountingParameters().catch((error) => {
+  console.warn("Initial accounting fetch failed:", error);
+});
 
 async function fetchAccountingParameters() {
   const stored = await chrome.storage.local.get(["ninkConfig", "ninkSession"]);
@@ -97,6 +129,10 @@ async function fetchAccountingParameters() {
   const accountingUrl = `${apiBase}/v1/accounting/parameters?user=${encodeURIComponent(session.userId)}`;
 
   try {
+    if (config.useLocalApi !== false) {
+      await verifyNinkApiHealth(apiBase);
+    }
+
     const response = await fetch(accountingUrl, {
       headers: buildSessionAuthHeaders(session),
     });
@@ -106,12 +142,24 @@ async function fetchAccountingParameters() {
     }
 
     const data = await response.json();
+    if (config.useLocalApi !== false && data.source !== "nink-cloud-api") {
+      throw new Error(
+        `Unexpected accounting source "${data.source}". Run packages/api on port 8787, not the legacy stub.`
+      );
+    }
+
+    const latest = await chrome.storage.local.get("ninkSession");
+    if (!latest.ninkSession?.userId) {
+      return;
+    }
+
     await applyAccountingState({
       balance: data.balance,
       feeRequirement: data.feeRequirement,
       source: data.source || "nink-cloud-api",
       isLocalDevMode: false,
     });
+    await chrome.storage.local.remove("accountingError");
   } catch (error) {
     console.warn("NINK accounting API unreachable.", error);
     if (config.useLocalApi === false) {
@@ -119,6 +167,9 @@ async function fetchAccountingParameters() {
       return;
     }
     await chrome.storage.local.remove("accounting");
+    await chrome.storage.local.set({
+      accountingError: error.message || "Gate 4 API unavailable.",
+    });
   }
 }
 
@@ -245,7 +296,7 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
 
   if (request.action === "LOGOUT_NINK_ACCOUNT") {
     (async () => {
-      await chrome.storage.local.remove(["ninkSession", "accounting"]);
+      await clearNinkSessionStorage();
       sendResponse({ status: "SUCCESS" });
     })().catch((error) => {
       sendResponse({ status: "ERROR", message: error.message || String(error) });
@@ -278,6 +329,10 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       }
 
       const apiBase = await getApiBaseUrl();
+      if (config.useLocalApi !== false) {
+        await verifyNinkApiHealth(apiBase);
+      }
+
       const response = await fetch(`${apiBase}/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -304,8 +359,10 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
           stub: false,
         },
       });
-      await fetchAccountingParameters();
       sendResponse({ status: "SUCCESS" });
+      fetchAccountingParameters().catch((error) => {
+        console.warn("Post-login accounting refresh failed:", error);
+      });
     })().catch((error) => {
       sendResponse({ status: "ERROR", message: error.message || String(error) });
     });
