@@ -9,33 +9,47 @@ Do **not** launch mainnet until every gate passes. Local Hardhat quirks (MetaMas
 - [ ] Registry: `anchorFee` starts at 0.01 NINK, `setAnchorFee` owner-only
 - [ ] `anchorState` pulls fee via `transferFrom` and emits `AnchorRecorded`
 
-## Gate 2 — In-app balance (users never rely on MetaMask alone)
+## Gate 2 — In-app balance (default: NINK account)
 
-- [ ] Extension popup shows **On-chain NINK** from `balanceOf` (token contract RPC)
+- [ ] Extension popup shows **Your NINK** from signed-in account (API or stub fallback)
+- [ ] Sign-off fee shown before sign-off
+- [ ] Sign-off disabled when balance &lt; fee
+- [ ] Stub login replaced with real auth before public launch
+
+## Gate 2b — In-app balance (advanced: wallet mode)
+
+- [ ] Extension shows **On-chain NINK** from `balanceOf` (token contract RPC)
 - [ ] Anchor fee shown from registry `anchorFee()`
 - [ ] Sign-off disabled when on-chain balance &lt; fee
 - [ ] Label states balance is from **contract**, not MetaMask UI
 
-## Gate 3 — Wallet UX (pre-launch testnet)
+## Gate 3 — Verify signed sessions
 
-- [ ] Verify token on **Base Sepolia** with block explorer + token list submission
-- [ ] Document: “Balance of record is in NINK extension”
+- [ ] Sign-off produces `.nink` + `.ninkkey` pair
+- [ ] **Session Viewer** decrypts conversation and shows metadata (`stateHash`, `transactionHash`, network)
+- [ ] Audit record / timeline renders for captured sessions
 
-## Gate 4 — Public network deploy
+## Gate 4 — NINK cloud backend (required for average users)
+
+- [ ] `POST /v1/auth/login` — replace email stub
+- [ ] `GET /v1/accounting/parameters?user=` — live balance per account
+- [ ] `POST /v1/blockchain/anchor` — relayer returns real `transactionHash`
+- [ ] Sign-off deducts fee server-side (atomic with anchor)
+
+## Gate 5 — Public network deploy
 
 - [ ] Deploy `ProjectNinkToken` + `NinkRegistry` to target L2 (e.g. Base)
 - [ ] Verify both contracts on block explorer
-- [ ] Update `chainConfig.js` with production RPC + addresses
+- [ ] Point relayer at production contracts
 - [ ] Submit token to explorer token list + CoinGecko / Uniswap list (post-audit)
 
-## Gate 5 — End-to-end sign-off
+## Gate 6 — End-to-end sign-off (all modes)
 
-- [ ] User approves NINK spend to registry
-- [ ] Sign-off anchors hash, fee moves to treasury
+- [ ] Account mode: login → sign-off → viewer (no MetaMask)
+- [ ] Wallet mode: connect → approve → anchor → viewer
 - [ ] `.nink` envelope contains `transactionHash` + `stateHash`
-- [ ] Viewer decrypts and shows audit record
 
-## Gate 6 — Ops
+## Gate 7 — Ops
 
 - [ ] Treasury multisig (not single deployer key)
 - [ ] `setAnchorFee` runbook if NINK price moves
@@ -49,7 +63,17 @@ Do **not** launch mainnet until every gate passes. Local Hardhat quirks (MetaMas
 |--------|----------------|
 | NINK not visible on Hardhat local | **No** — localhost is dev-only |
 | Hardhat console shows correct balance | Token contract OK |
-| Extension **On-chain NINK** panel correct | **Primary user UX — required for launch** |
+| Extension **Your NINK** panel correct (account mode) | **Primary user UX — required for launch** |
+| Extension **On-chain NINK** panel correct (wallet mode) | Required for advanced / audit path |
 | Token visible on Base Sepolia explorer + lists | Wallet discovery OK |
 
-**Rule:** Ship when **extension + explorer + testnet** prove balances. Never ship when the only place users check balance is MetaMask on localhost.
+**Rule:** Ship when **extension account mode + viewer + relayer API** prove balances and sign-off. Wallet mode is optional for power users.
+
+---
+
+## Next build order
+
+1. **Gate 3** — viewer verification (done in extension UI)
+2. **Gate 4** — NINK cloud API skeleton (auth, accounting, anchor)
+3. **Gate 5** — Base Sepolia deploy + relayer wired to testnet
+4. Buy flow + KYC (after Gate 4)

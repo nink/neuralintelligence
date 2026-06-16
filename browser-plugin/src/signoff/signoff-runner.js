@@ -22,6 +22,12 @@ function setRunnerStatus(text, tone = "info") {
   statusEl.className = tone === "success" ? "success" : tone === "error" ? "error" : "";
 }
 
+function openSessionViewer() {
+  chrome.tabs.create({ url: chrome.runtime.getURL("viewer.html") });
+}
+
+document.getElementById("open-viewer-btn").addEventListener("click", openSessionViewer);
+
 async function main() {
   const params = await readSignOffParams();
 
@@ -58,14 +64,24 @@ async function main() {
 
     const result = await executeSignOff(params.useDevStubs, params.chatTabId, setRunnerStatus);
 
-    setRunnerStatus("On-chain anchor complete. Choose where to save your .nink file…");
+    setRunnerStatus(
+      params.useDevStubs
+        ? "Saving encrypted session files…"
+        : params.useWalletMode
+          ? "Anchor complete. Choose where to save your .nink file…"
+          : "Sign-off complete. Choose where to save your .nink file…"
+    );
     const { ninkFilename, keyFilename } = await triggerNinkSignOffDownloads(
       result.completedPackage,
       result.aesKeyBase64
     );
 
     await chrome.storage.local.remove("signOffParams");
-    setRunnerStatus(buildSignOffSuccessMessage(result, ninkFilename, keyFilename), "success");
+    setRunnerStatus(
+      `${buildSignOffSuccessMessage(result, ninkFilename, keyFilename)} Drop both files in Session Viewer to verify.`,
+      "success"
+    );
+    document.getElementById("open-viewer-btn").hidden = false;
   } catch (error) {
     setRunnerStatus(`Error: ${error.message}`, "error");
   }

@@ -453,6 +453,10 @@
           <div class="meta-label">State Hash</div>
           <div id="meta-state" class="meta-value">—</div>
         </div>
+        <div class="meta-row">
+          <div class="meta-label">Anchor Method</div>
+          <div id="meta-anchor-method" class="meta-value">—</div>
+        </div>
       </div>
     </section>
 
@@ -758,6 +762,8 @@
       document.getElementById("meta-network").textContent = session.blockchainNetwork || "—";
       document.getElementById("meta-tx").textContent = session.transactionHash || "—";
       document.getElementById("meta-state").textContent = session.stateHash || "—";
+      document.getElementById("meta-anchor-method").textContent =
+        session.anchorMethod || (session.blockchainNetwork === "NINK-Cloud" ? "nink-cloud-relayer" : "—");
       metadataPanel.classList.remove("hidden");
       decryptPanel.classList.remove("hidden");
       chatPanel.classList.add("hidden");

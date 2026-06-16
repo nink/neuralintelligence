@@ -453,6 +453,10 @@ document.getElementById("wallet-mode-toggle").addEventListener("change", async (
   }
 });
 
+document.getElementById("open-viewer-btn").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("viewer.html") });
+});
+
 let signOffInProgress = false;
 
 document.getElementById("sign-off-btn").addEventListener("click", async () => {
