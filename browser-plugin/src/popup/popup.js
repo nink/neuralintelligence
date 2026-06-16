@@ -255,6 +255,10 @@ async function updateUI() {
     }
 
     setLocalDevModeIndicator(useDevStubs, useWalletMode);
+
+    if (signOffInProgress) {
+      document.getElementById("sign-off-btn").disabled = true;
+    }
   } catch (error) {
     const statusConsole = document.getElementById("status-console");
     if (statusConsole && !statusConsole.textContent) {
@@ -264,14 +268,30 @@ async function updateUI() {
 }
 
 updateUI();
+refreshSignOffStatusFromStorage();
 sendBackgroundMessage({ action: "WARM_INJECT_CHAT_TABS" }).catch(() => {});
 chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local") {
+    return;
+  }
+
+  if (changes.signOffOutcome?.newValue) {
+    applySignOffOutcome(changes.signOffOutcome.newValue);
+  }
+
+  if (changes.signOffParams?.newValue && !changes.signOffOutcome) {
+    signOffInProgress = true;
+    const consoleLog = document.getElementById("status-console");
+    consoleLog.innerText =
+      "Sign-off in progress… save both files when the runner window prompts.";
+    updateUI();
+  }
+
   if (
-    areaName === "local" &&
-    (changes.accounting ||
-      changes.ninkConfig ||
-      changes.connectedWallet ||
-      changes.ninkSession)
+    changes.accounting ||
+    changes.ninkConfig ||
+    changes.connectedWallet ||
+    changes.ninkSession
   ) {
     updateUI();
   }
@@ -447,6 +467,37 @@ document.getElementById("open-viewer-btn").addEventListener("click", () => {
 
 let signOffInProgress = false;
 
+function applySignOffOutcome(outcome) {
+  const consoleLog = document.getElementById("status-console");
+  signOffInProgress = false;
+
+  if (outcome?.status === "success") {
+    consoleLog.innerText =
+      outcome.message ||
+      "Files downloaded. Open Session Viewer below to view and verify your session.";
+  } else if (outcome?.status === "error") {
+    consoleLog.innerText = `Error: ${outcome.message || "Sign-off failed."}`;
+  }
+
+  updateUI();
+}
+
+async function refreshSignOffStatusFromStorage() {
+  const stored = await readLocalStorage(["signOffParams", "signOffOutcome"]);
+
+  if (stored.signOffOutcome) {
+    applySignOffOutcome(stored.signOffOutcome);
+    return;
+  }
+
+  if (stored.signOffParams) {
+    signOffInProgress = true;
+    document.getElementById("status-console").innerText =
+      "Sign-off in progress… save both files when the runner window prompts.";
+    updateUI();
+  }
+}
+
 document.getElementById("sign-off-btn").addEventListener("click", async () => {
   if (signOffInProgress) {
     return;
@@ -468,6 +519,7 @@ document.getElementById("sign-off-btn").addEventListener("click", async () => {
     }
     await validateSignOffReady(useDevStubs, tab.id);
 
+    await chrome.storage.local.remove("signOffOutcome");
     await chrome.storage.local.set({
       signOffParams: {
         useDevStubs,
@@ -477,6 +529,9 @@ document.getElementById("sign-off-btn").addEventListener("click", async () => {
       },
     });
 
+    consoleLog.innerText =
+      "Sign-off in progress… save both files when the runner window prompts.";
+
     await chrome.windows.create({
       url: chrome.runtime.getURL("signoff-runner.html"),
       type: "popup",
@@ -484,22 +539,13 @@ document.getElementById("sign-off-btn").addEventListener("click", async () => {
       height: 560,
       focused: true,
     });
-
-    if (useDevStubs) {
-      consoleLog.innerText =
-        "Sign-off window opened — choose where to save your .nink and .ninkkey files.";
-    } else if (useWalletMode) {
-      consoleLog.innerText =
-        "Sign-off window opened — keep it open, confirm MetaMask on your chat tab, then save both files.";
-    } else {
-      consoleLog.innerText =
-        "Sign-off window opened — keep it open until both files are saved.";
-    }
   } catch (error) {
     consoleLog.innerText = `Error: ${error.message}`;
-  } finally {
     signOffInProgress = false;
-    signOffButton.disabled = false;
+  } finally {
+    if (!signOffInProgress) {
+      signOffButton.disabled = false;
+    }
     updateUI();
   }
 });

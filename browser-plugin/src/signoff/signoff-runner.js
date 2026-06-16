@@ -76,13 +76,35 @@ async function main() {
       result.aesKeyBase64
     );
 
+    await chrome.storage.local.set({
+      signOffOutcome: {
+        status: "success",
+        message:
+          "Files downloaded. Open Session Viewer below to view and verify your session.",
+        at: new Date().toISOString(),
+        ninkFilename,
+        keyFilename,
+      },
+    });
     await chrome.storage.local.remove("signOffParams");
     setRunnerStatus(
-      `${buildSignOffSuccessMessage(result, ninkFilename, keyFilename)} Drop both files in Session Viewer to verify.`,
+      `${buildSignOffSuccessMessage(result, ninkFilename, keyFilename)} Drop both files in Session Viewer to verify. Closing in a few seconds…`,
       "success"
     );
     document.getElementById("open-viewer-btn").hidden = false;
+
+    setTimeout(() => {
+      window.close();
+    }, 3000);
   } catch (error) {
+    await chrome.storage.local.set({
+      signOffOutcome: {
+        status: "error",
+        message: error.message,
+        at: new Date().toISOString(),
+      },
+    });
+    await chrome.storage.local.remove("signOffParams");
     setRunnerStatus(`Error: ${error.message}`, "error");
   }
 }
