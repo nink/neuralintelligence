@@ -8,7 +8,12 @@ import {
 } from "../utils/cryptoEngine.js";
 import { createMockAnchorReceipt } from "../utils/devStubs.js";
 import { TabVideoRecorder } from "../content/videoRecorder.js";
-import { isSupportedChatUrl } from "../config/chatPlatforms.js";
+import {
+  getChatTabById,
+  isSupportedChatTab,
+  warmInjectScraperOnTab,
+} from "../utils/chatTab.js";
+
 import {
   anchorSessionToLedger,
   resolvePlatformIdFromTab,
@@ -16,11 +21,6 @@ import {
 import { NINK_CHAIN_CONFIG } from "../config/chainConfig.js";
 import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
 import { getOnChainWalletSnapshot, readChainHealth } from "../utils/tokenBalance.js";
-
-const CONTENT_SCRIPT_PATHS = [
-  "src/config/chatPlatforms.global.js",
-  "src/content/scrapers.js",
-];
 
 function readLocalStorage(keys) {
   return new Promise((resolve, reject) => {
@@ -44,22 +44,6 @@ function sendBackgroundMessage(message) {
       resolve(response);
     });
   });
-}
-
-function getChatTabById(chatTabId) {
-  return new Promise((resolve, reject) => {
-    chrome.tabs.get(chatTabId, (tab) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-      resolve(tab);
-    });
-  });
-}
-
-function isSupportedChatTab(tab) {
-  return isSupportedChatUrl(String(tab.url || ""));
 }
 
 function readInjectionFailure(injectionResults) {
@@ -88,7 +72,7 @@ function readInjectionFailure(injectionResults) {
   return null;
 }
 
-async function captureSessionFromTab(tab) {
+async function captureSessionFromTab(tab, attempt = 1) {
   const expectedBuild = chrome.runtime.getManifest().version;
 
   await chrome.scripting.executeScript({
@@ -99,18 +83,16 @@ async function captureSessionFromTab(tab) {
     },
   });
 
-  await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: (build) => {
-      globalThis.__NINK_SCRAPER_BUILD__ = build;
-    },
-    args: [expectedBuild],
-  });
-
-  await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    files: CONTENT_SCRIPT_PATHS,
-  });
+  const injected = await warmInjectScraperOnTab(tab.id);
+  if (!injected) {
+    if (attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return captureSessionFromTab(tab, attempt + 1);
+    }
+    throw new Error(
+      "Could not prepare capture on this chat tab. Switch to your conversation tab and try again."
+    );
+  }
 
   let injectionResults;
 
@@ -123,8 +105,7 @@ async function captureSessionFromTab(tab) {
           if (typeof scrape !== "function") {
             return {
               ok: false,
-              error:
-                "NINK scraper is not initialized. Reload the chat tab and try again.",
+              error: "Capture is not ready on this tab yet.",
             };
           }
 
@@ -137,7 +118,7 @@ async function captureSessionFromTab(tab) {
             return {
               ok: false,
               error:
-                `Stale capture code loaded (schema ${payload.captureSchemaVersion ?? "?"}, build ${payload.captureBuild ?? "missing"}, need ${expectedBuild}). Reload the extension and try again.`,
+                `Stale capture code loaded (schema ${payload.captureSchemaVersion ?? "?"}, build ${payload.captureBuild ?? "missing"}, need ${expectedBuild}). Reload the extension at chrome://extensions and try again.`,
             };
           }
           const conversation = Array.isArray(payload.conversation)
@@ -185,14 +166,22 @@ async function captureSessionFromTab(tab) {
       args: [expectedBuild],
     });
   } catch (error) {
+    if (attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return captureSessionFromTab(tab, attempt + 1);
+    }
     throw new Error(
       error?.message ||
-        "Content script unavailable. Reload the chat tab, then try again."
+        "Could not capture this chat tab. Switch to your conversation tab and try again."
     );
   }
 
   const injectionFailure = readInjectionFailure(injectionResults);
   if (injectionFailure) {
+    if (attempt < 2 && /not ready|no session data|Capture is not ready/i.test(injectionFailure)) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return captureSessionFromTab(tab, attempt + 1);
+    }
     throw new Error(injectionFailure);
   }
 

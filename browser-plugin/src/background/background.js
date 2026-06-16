@@ -13,6 +13,7 @@ import { getOnChainWalletSnapshot } from "../utils/tokenBalance.js";
 import {
   readMetaMaskAddressOnTab,
 } from "../utils/walletTokenUi.js";
+import { warmInjectOpenChatTabs } from "../utils/chatTab.js";
 const PRODUCTION_ACCOUNTING_BASE =
   "https://api.nink.network/v1/accounting/parameters";
 const PRODUCTION_ANCHOR_URL = "https://api.nink.network/v1/blockchain/anchor";
@@ -41,6 +42,11 @@ chrome.runtime.onInstalled.addListener(async () => {
     await chrome.storage.local.set({ ninkConfig: DEFAULT_NINK_CONFIG });
   }
   await fetchAccountingParameters();
+  await warmInjectOpenChatTabs();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  warmInjectOpenChatTabs().catch(() => {});
 });
 
 chrome.alarms.create("POLL_EXTERNAL_ACCOUNTING", { periodInMinutes: 0.5 });
@@ -197,6 +203,16 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     (async () => {
       await fetchAccountingParameters();
       sendResponse({ status: "SUCCESS" });
+    })().catch((error) => {
+      sendResponse({ status: "ERROR", message: error.message || String(error) });
+    });
+    return true;
+  }
+
+  if (request.action === "WARM_INJECT_CHAT_TABS") {
+    (async () => {
+      const injected = await warmInjectOpenChatTabs();
+      sendResponse({ status: "SUCCESS", injected });
     })().catch((error) => {
       sendResponse({ status: "ERROR", message: error.message || String(error) });
     });

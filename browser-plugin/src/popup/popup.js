@@ -1,6 +1,7 @@
 import { hasSufficientBalance, formatTokenForDisplay } from "../utils/tokenMath.js";
 import { LOCAL_DEV_ACCOUNTING, STUB_ACCOUNT_ACCOUNTING } from "../utils/devStubs.js";
 import { isSupportedChatUrl } from "../config/chatPlatforms.js";
+import { resolveChatTabForSignOff } from "../utils/chatTab.js";
 import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
 import { getOnChainWalletSnapshot, readChainHealth } from "../utils/tokenBalance.js";
 import {
@@ -122,21 +123,7 @@ function sendBackgroundMessage(message) {
 }
 
 function getActiveChatTab() {
-  return new Promise((resolve, reject) => {
-    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-
-      if (!tabs[0]?.id) {
-        reject(new Error("No active tab available for capture."));
-        return;
-      }
-
-      resolve(tabs[0]);
-    });
-  });
+  return resolveChatTabForSignOff();
 }
 
 function isSupportedChatTab(tab) {
@@ -277,6 +264,7 @@ async function updateUI() {
 }
 
 updateUI();
+sendBackgroundMessage({ action: "WARM_INJECT_CHAT_TABS" }).catch(() => {});
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (
     areaName === "local" &&
