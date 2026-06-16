@@ -1,5 +1,5 @@
 import { hasSufficientBalance, formatTokenForDisplay } from "../utils/tokenMath.js";
-import { LOCAL_DEV_ACCOUNTING } from "../utils/devStubs.js";
+import { LOCAL_DEV_ACCOUNTING, STUB_ACCOUNT_ACCOUNTING } from "../utils/devStubs.js";
 import { isSupportedChatUrl } from "../config/chatPlatforms.js";
 import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
 import { getOnChainWalletSnapshot, readChainHealth } from "../utils/tokenBalance.js";
@@ -83,8 +83,6 @@ async function refreshAccountPanel() {
     accounting.requiredFee
   );
 }
-
-async function refreshOnChainWalletPanel() {
 
 function readLocalStorage(keys) {
   return new Promise((resolve, reject) => {
@@ -305,16 +303,21 @@ async function loginStubFromPopup() {
     loginBtn.disabled = true;
     statusConsole.innerText = "Signing in…";
 
-    const response = await sendBackgroundMessage({
-      action: "LOGIN_NINK_ACCOUNT",
-      email,
+    const session = buildStubSession(email);
+    await chrome.storage.local.set({
+      ninkSession: session,
+      accounting: {
+        userBalance: STUB_ACCOUNT_ACCOUNTING.balance,
+        requiredFee: STUB_ACCOUNT_ACCOUNTING.feeRequirement,
+        source: STUB_ACCOUNT_ACCOUNTING.source,
+        isLocalDevMode: false,
+      },
     });
 
-    if (response?.status !== "SUCCESS") {
-      throw new Error(response?.message || "Sign-in failed.");
-    }
+    sendBackgroundMessage({ action: "REFRESH_ACCOUNTING" }).catch(() => {});
 
-    statusConsole.innerText = `Signed in as ${buildStubSession(email).email}`;
+    statusConsole.innerText = `Signed in as ${session.email}`;
+    await updateUI();
   } catch (error) {
     statusConsole.innerText = `Error: ${error.message}`;
   } finally {
@@ -325,7 +328,7 @@ async function loginStubFromPopup() {
 
 async function logoutStubFromPopup() {
   const statusConsole = document.getElementById("status-console");
-  await sendBackgroundMessage({ action: "LOGOUT_NINK_ACCOUNT" });
+  await chrome.storage.local.remove(["ninkSession", "accounting"]);
   statusConsole.innerText = "Signed out.";
   updateUI();
 }
