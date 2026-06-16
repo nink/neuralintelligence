@@ -1,0 +1,12 @@
+{
+  "name": "@nink/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/server.mjs",
+    "start": "node src/server.mjs"
+  },
+  "dependencies": {
+    "ethers": "^6.13.5"
+  }
+}

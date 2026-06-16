@@ -1,4 +1,5 @@
 import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
+import { resolveApiBaseUrl } from "../config/apiConfig.js";
 import {
   LOCAL_DEV_ACCOUNTING,
   STUB_ACCOUNT_ACCOUNTING,
@@ -14,16 +15,26 @@ import {
   readMetaMaskAddressOnTab,
 } from "../utils/walletTokenUi.js";
 import { warmInjectOpenChatTabs } from "../utils/chatTab.js";
-const PRODUCTION_ACCOUNTING_BASE =
-  "https://api.nink.network/v1/accounting/parameters";
-const PRODUCTION_ANCHOR_URL = "https://api.nink.network/v1/blockchain/anchor";
 
-let systemAccountingState = { ...LOCAL_DEV_ACCOUNTING };
+async function getApiBaseUrl() {
+  const config = await getNinkConfig();
+  return resolveApiBaseUrl(config);
+}
+
+function buildSessionAuthHeaders(session) {
+  const headers = { "Content-Type": "application/json" };
+  if (session?.sessionToken) {
+    headers.Authorization = `Bearer ${session.sessionToken}`;
+  }
+  return headers;
+}
 
 async function getNinkConfig() {
   const stored = await chrome.storage.local.get("ninkConfig");
   return { ...DEFAULT_NINK_CONFIG, ...stored.ninkConfig };
 }
+
+let systemAccountingState = { ...LOCAL_DEV_ACCOUNTING };
 
 async function applyAccountingState(payload) {
   systemAccountingState = {
@@ -82,27 +93,32 @@ async function fetchAccountingParameters() {
     return;
   }
 
-  const accountingUrl = `${PRODUCTION_ACCOUNTING_BASE}?user=${encodeURIComponent(session.userId)}`;
+  const apiBase = await getApiBaseUrl();
+  const accountingUrl = `${apiBase}/v1/accounting/parameters?user=${encodeURIComponent(session.userId)}`;
 
   try {
-    const response = await fetch(accountingUrl);
+    const response = await fetch(accountingUrl, {
+      headers: buildSessionAuthHeaders(session),
+    });
     if (!response.ok) {
-      throw new Error(`Accounting API returned ${response.status}`);
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.message || `Accounting API returned ${response.status}`);
     }
 
     const data = await response.json();
     await applyAccountingState({
       balance: data.balance,
       feeRequirement: data.feeRequirement,
-      source: "production-api",
+      source: data.source || "nink-cloud-api",
       isLocalDevMode: false,
     });
   } catch (error) {
-    console.warn(
-      "api.nink.network unreachable. Using stub NINK account balance for signed-in user.",
-      error
-    );
-    await applyAccountingState(STUB_ACCOUNT_ACCOUNTING);
+    console.warn("NINK accounting API unreachable.", error);
+    if (config.useLocalApi === false) {
+      await applyAccountingState(STUB_ACCOUNT_ACCOUNTING);
+      return;
+    }
+    await chrome.storage.local.remove("accounting");
   }
 }
 
@@ -111,30 +127,38 @@ async function anchorHashOnNetwork(stateHash, appliedFee, useDevStubs) {
     return createMockAnchorReceipt();
   }
 
-  try {
-    const response = await fetch(PRODUCTION_ANCHOR_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stateHash, tokenFeeBurned: appliedFee }),
-    });
+  const stored = await chrome.storage.local.get("ninkSession");
+  const session = stored.ninkSession;
+  const apiBase = await getApiBaseUrl();
 
-    if (!response.ok) {
-      throw new Error(`Anchor API returned ${response.status}`);
-    }
+  const response = await fetch(`${apiBase}/v1/blockchain/anchor`, {
+    method: "POST",
+    headers: buildSessionAuthHeaders(session),
+    body: JSON.stringify({ stateHash, tokenFeeBurned: appliedFee }),
+  });
 
-    const receipt = await response.json();
-    return {
-      ...receipt,
-      source: "production-api",
-      isLocalDevMode: false,
-    };
-  } catch (error) {
-    console.warn(
-      "Blockchain relayer offline. Simulating local on-chain anchor success receipt.",
-      error
-    );
-    return createMockAnchorReceipt();
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok || payload.status === "ERROR") {
+    throw new Error(payload.message || `Anchor API returned ${response.status}`);
   }
+
+  if (payload.balance) {
+    await applyAccountingState({
+      balance: payload.balance,
+      feeRequirement: appliedFee,
+      source: payload.source || "nink-cloud-api",
+      isLocalDevMode: false,
+    });
+  }
+
+  return {
+    txHash: payload.txHash,
+    blockNumber: payload.blockNumber ?? null,
+    source: payload.source || "nink-cloud-relayer",
+    isLocalDevMode: false,
+    onChain: payload.onChain ?? true,
+  };
 }
 
 function blobToDataUrl(blob) {
@@ -237,13 +261,47 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
         return;
       }
 
+      const config = await getNinkConfig();
+      if (config.useDevStubs) {
+        await chrome.storage.local.set({
+          ninkSession: {
+            userId: email,
+            email,
+            displayName: email.split("@")[0] || "user",
+            loggedInAt: new Date().toISOString(),
+            stub: true,
+          },
+        });
+        await fetchAccountingParameters();
+        sendResponse({ status: "SUCCESS" });
+        return;
+      }
+
+      const apiBase = await getApiBaseUrl();
+      const response = await fetch(`${apiBase}/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || payload.status === "ERROR") {
+        sendResponse({
+          status: "ERROR",
+          message: payload.message || `Login API returned ${response.status}`,
+        });
+        return;
+      }
+
       await chrome.storage.local.set({
         ninkSession: {
-          userId: email,
-          email,
-          displayName: email.split("@")[0] || "user",
+          userId: payload.user.userId,
+          email: payload.user.email,
+          displayName: payload.user.displayName,
+          sessionToken: payload.sessionToken,
+          sessionExpiresAt: payload.expiresAt,
           loggedInAt: new Date().toISOString(),
-          stub: true,
+          stub: false,
         },
       });
       await fetchAccountingParameters();

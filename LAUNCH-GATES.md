@@ -25,16 +25,16 @@ Do **not** launch mainnet until every gate passes. Local Hardhat quirks (MetaMas
 
 ## Gate 3 — Verify signed sessions
 
-- [ ] Sign-off produces `.nink` + `.ninkkey` pair
-- [ ] **Session Viewer** decrypts conversation and shows metadata (`stateHash`, `transactionHash`, network)
-- [ ] Audit record / timeline renders for captured sessions
+- [x] Sign-off produces `.nink` + `.ninkkey` pair
+- [x] **Session Viewer** decrypts conversation and shows metadata (`stateHash`, `transactionHash`, network)
+- [x] Audit record / timeline renders for captured sessions
 
 ## Gate 4 — NINK cloud backend (required for average users)
 
-- [ ] `POST /v1/auth/login` — replace email stub
-- [ ] `GET /v1/accounting/parameters?user=` — live balance per account
-- [ ] `POST /v1/blockchain/anchor` — relayer returns real `transactionHash`
-- [ ] Sign-off deducts fee server-side (atomic with anchor)
+- [x] `POST /v1/auth/login` — local API (`packages/api`); production auth TBD
+- [x] `GET /v1/accounting/parameters?user=` — live balance per account (local JSON store)
+- [x] `POST /v1/blockchain/anchor` — relayer returns real `transactionHash` when Hardhat running
+- [x] Sign-off deducts fee server-side (atomic with anchor)
 
 ## Gate 5 — Public network deploy
 
@@ -73,7 +73,7 @@ Do **not** launch mainnet until every gate passes. Local Hardhat quirks (MetaMas
 
 ## Next build order
 
-1. **Gate 3** — viewer verification (done in extension UI)
-2. **Gate 4** — NINK cloud API skeleton (auth, accounting, anchor)
+1. ~~**Gate 3** — viewer verification (done in extension UI)~~
+2. ~~**Gate 4** — NINK cloud API skeleton (auth, accounting, anchor)~~ — local dev at `packages/api`
 3. **Gate 5** — Base Sepolia deploy + relayer wired to testnet
-4. Buy flow + KYC (after Gate 4)
+4. Buy flow + KYC (after Gate 4 production deploy)

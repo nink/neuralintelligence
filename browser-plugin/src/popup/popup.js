@@ -10,7 +10,6 @@ import {
 } from "../utils/walletTokenUi.js";
 import { validateSignOffReady } from "../signoff/runSignOffPipeline.js";
 import {
-  buildStubSession,
   formatAccountLabel,
   isValidStubEmail,
 } from "../utils/ninkAccount.js";
@@ -75,9 +74,9 @@ async function refreshAccountPanel() {
   balanceEl.textContent = `${formatTokenForDisplay(accounting.userBalance)} NINK`;
   feeEl.textContent = formatTokenForDisplay(accounting.requiredFee);
   sourceLabel.textContent =
-    accounting.source === "production-api"
+    accounting.source === "production-api" || accounting.source === "nink-cloud-api"
       ? "Balance from your NINK account."
-      : "Demo balance (NINK cloud API not reachable yet).";
+      : "Demo balance (start packages/api for live balance).";
 
   signOffButton.disabled = !hasSufficientBalance(
     accounting.userBalance,
@@ -311,20 +310,17 @@ async function loginStubFromPopup() {
     loginBtn.disabled = true;
     statusConsole.innerText = "Signing in…";
 
-    const session = buildStubSession(email);
-    await chrome.storage.local.set({
-      ninkSession: session,
-      accounting: {
-        userBalance: STUB_ACCOUNT_ACCOUNTING.balance,
-        requiredFee: STUB_ACCOUNT_ACCOUNTING.feeRequirement,
-        source: STUB_ACCOUNT_ACCOUNTING.source,
-        isLocalDevMode: false,
-      },
+    const response = await sendBackgroundMessage({
+      action: "LOGIN_NINK_ACCOUNT",
+      email,
     });
 
-    sendBackgroundMessage({ action: "REFRESH_ACCOUNTING" }).catch(() => {});
+    if (response?.status !== "SUCCESS") {
+      throw new Error(response?.message || "Sign-in failed.");
+    }
 
-    statusConsole.innerText = `Signed in as ${session.email}`;
+    const stored = await readLocalStorage(["ninkSession"]);
+    statusConsole.innerText = `Signed in as ${stored.ninkSession?.email || email}`;
     await updateUI();
   } catch (error) {
     statusConsole.innerText = `Error: ${error.message}`;
@@ -336,8 +332,12 @@ async function loginStubFromPopup() {
 
 async function logoutStubFromPopup() {
   const statusConsole = document.getElementById("status-console");
-  await chrome.storage.local.remove(["ninkSession", "accounting"]);
-  statusConsole.innerText = "Signed out.";
+  try {
+    await sendBackgroundMessage({ action: "LOGOUT_NINK_ACCOUNT" });
+    statusConsole.innerText = "Signed out.";
+  } catch (error) {
+    statusConsole.innerText = `Error: ${error.message}`;
+  }
   updateUI();
 }
 

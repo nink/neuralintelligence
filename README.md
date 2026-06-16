@@ -42,7 +42,8 @@ Chrome Manifest V3 extension that:
 4. Decrypt in the viewer: serve `browser-plugin/` over HTTP (not `file://`) and drop `.nink` + `.ninkkey`
 
 ```powershell
-node browser-plugin/scripts/dev-stub-server.mjs   # optional accounting/anchor stubs
+node browser-plugin/scripts/dev-stub-server.mjs   # legacy stub (superseded by packages/api)
+cd packages/api && npm install && npm run dev     # Gate 4 local cloud API
 ```
 
 ### Session audit payload (encrypted)
@@ -67,6 +68,10 @@ See [`browser-plugin/README.md`](browser-plugin/README.md) for version and schem
 neuralintelligence/
 ├── README.md                 # This file
 ├── ARCHITECTURE.md           # Session model + trust boundaries
+├── LAUNCH-GATES.md           # Pre-launch checklist
+├── packages/
+│   ├── api/                  # Gate 4 — auth, accounting, anchor relayer
+│   └── contracts/            # NINK token + registry (Hardhat)
 └── browser-plugin/           # Manifest V3 extension (Phase 1)
     ├── manifest.json
     ├── viewer.html
@@ -82,7 +87,7 @@ neuralintelligence/
 |---------|--------|
 | Browser extension | Local load unpacked; Chrome Web Store TBD |
 | Viewer | Local HTTP (`viewer.html`); hosted viewer TBD |
-| Anchor API | Dev stubs + `api.nink.network` placeholder |
+| Anchor API | Local `packages/api` (Gate 4); production `api.nink.network` TBD |
 | Production chain | Base Sepolia (mock in dev) |
 
 ---
