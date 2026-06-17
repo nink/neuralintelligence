@@ -1,5 +1,5 @@
 import { ANCHOR_FEE_WEI } from "./constants.mjs";
-import { InvalidCredentialsError } from "./password.mjs";
+import { InvalidCredentialsError, PasswordValidationError } from "./password.mjs";
 import {
   anchorForUser,
   createOrLoginUser,
@@ -11,6 +11,13 @@ import {
   normalizeEmail,
   saveStore,
 } from "./store.mjs";
+import {
+  SignupConflictError,
+  SignupVerificationError,
+  supabaseCompleteSignup,
+  supabaseSendSignupVerification,
+} from "./signupStore.mjs";
+import { renderSignupPage } from "./signupPage.mjs";
 import {
   supabaseCreateOrLoginUser,
   supabaseDebitVirtualAnchor,
@@ -151,6 +158,27 @@ export function sendJson(res, statusCode, payload) {
   res.end(body);
 }
 
+function htmlHeaders() {
+  return {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+  };
+}
+
+export function sendHtml(res, statusCode, html) {
+  if (typeof res.status === "function") {
+    res.status(statusCode);
+    for (const [key, value] of Object.entries(htmlHeaders())) {
+      res.setHeader(key, value);
+    }
+    res.send(html);
+    return;
+  }
+
+  res.writeHead(statusCode, htmlHeaders());
+  res.end(html);
+}
+
 async function readJsonBody(req) {
   if (req.body && typeof req.body === "object") {
     return req.body;
@@ -232,8 +260,13 @@ export async function handleApiRequest(req, res) {
     sendJson(res, 200, {
       status: "ok",
       service: "nink-api",
-      docs: "GET /health · POST /v1/auth/login · GET /v1/accounting/parameters · POST /v1/blockchain/anchor",
+      docs: "GET /health · GET /signup · POST /v1/auth/signup/send-code · POST /v1/auth/signup/complete · POST /v1/auth/login · GET /v1/accounting/parameters · POST /v1/blockchain/anchor",
     });
+    return;
+  }
+
+  if (method === "GET" && pathname === "/signup") {
+    sendHtml(res, 200, renderSignupPage());
     return;
   }
 
@@ -246,6 +279,67 @@ export async function handleApiRequest(req, res) {
       railMode: useVirtualRailOnly() ? "virtual" : "open_loop",
       ...extra,
     });
+    return;
+  }
+
+  if (method === "POST" && pathname === "/v1/auth/signup/send-code") {
+    if (!useSupabaseStore()) {
+      sendJson(res, 501, { status: "ERROR", message: "Signup requires NINK_STORE=supabase." });
+      return;
+    }
+
+    try {
+      const body = await readJsonBody(req);
+      const result = await supabaseSendSignupVerification(body.email);
+      sendJson(res, 200, { status: "SUCCESS", ...result });
+    } catch (error) {
+      if (error instanceof SignupConflictError) {
+        sendJson(res, 409, { status: "ERROR", message: error.message });
+        return;
+      }
+      const status = /wait a minute/i.test(error.message) ? 429 : 400;
+      sendJson(res, status, { status: "ERROR", message: error.message });
+    }
+    return;
+  }
+
+  if (method === "POST" && pathname === "/v1/auth/signup/complete") {
+    if (!useSupabaseStore()) {
+      sendJson(res, 501, { status: "ERROR", message: "Signup requires NINK_STORE=supabase." });
+      return;
+    }
+
+    try {
+      const body = await readJsonBody(req);
+      const result = await supabaseCompleteSignup(body.email, body.code, body.password);
+      sendJson(res, 200, {
+        status: "SUCCESS",
+        user: {
+          userId: result.user.userId,
+          email: result.user.email,
+          displayName: result.user.displayName,
+        },
+        sessionToken: result.sessionToken,
+        expiresAt: result.expiresAt,
+        balance: result.balance,
+        feeRequirement: result.feeRequirement,
+        signupBonusWei: result.signupBonusWei,
+      });
+    } catch (error) {
+      if (error instanceof SignupConflictError) {
+        sendJson(res, 409, { status: "ERROR", message: error.message });
+        return;
+      }
+      if (error instanceof SignupVerificationError) {
+        sendJson(res, 400, { status: "ERROR", message: error.message });
+        return;
+      }
+      if (error instanceof PasswordValidationError) {
+        sendJson(res, 400, { status: "ERROR", message: error.message, details: error.messages });
+        return;
+      }
+      sendJson(res, 500, { status: "ERROR", message: error.message });
+    }
     return;
   }
 

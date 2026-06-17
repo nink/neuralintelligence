@@ -23,11 +23,14 @@ I **cannot** log into your Supabase or Vercel accounts. You add secrets in dashb
 
 ---
 
-## Step 1 — Run database migration
+## Step 1 — Run database migrations
 
 1. Supabase → **SQL Editor** → New query  
-2. Paste contents of [`supabase/migrations/001_rail1_virtual_nink.sql`](../../supabase/migrations/001_rail1_virtual_nink.sql)  
-3. **Run** — creates `app_users`, virtual balances, ledger, anchor events, and `debit_virtual_nink_anchor()` RPC
+2. Run each migration in order:
+   - [`001_rail1_virtual_nink.sql`](../../supabase/migrations/001_rail1_virtual_nink.sql)
+   - [`002_signup_bonus_5_nink.sql`](../../supabase/migrations/002_signup_bonus_5_nink.sql) (if not already applied)
+   - [`003_app_user_password.sql`](../../supabase/migrations/003_app_user_password.sql)
+   - [`004_signup_verifications.sql`](../../supabase/migrations/004_signup_verifications.sql) — email codes for `/signup`
 
 ---
 
@@ -62,6 +65,11 @@ npx vercel env add NINK_STORE
 # value: supabase
 npx vercel env add NINK_RAIL_MODE
 # value: virtual
+npx vercel env add RESEND_API_KEY
+npx vercel env add RESEND_FROM_EMAIL
+# value: NINK <hello@nink.com>
+npx vercel env add NINK_PUBLIC_BASE_URL
+# value: https://ni.nink.com
 npx vercel --prod
 ```
 
@@ -76,7 +84,12 @@ NINK_STORE=supabase
 NINK_RAIL_MODE=virtual
 NINK_ANCHOR_FEE_WEI=10000000000000000
 NINK_SIGNUP_BONUS_WEI=5000000000000000000
+RESEND_API_KEY=<from Resend dashboard>
+RESEND_FROM_EMAIL=NINK <hello@nink.com>
+NINK_PUBLIC_BASE_URL=https://ni.nink.com
 ```
+
+Signup page: **https://ni.nink.com/signup** (email verification via Resend, then password creation).
 
 ---
 

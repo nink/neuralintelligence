@@ -35,3 +35,45 @@ export class InvalidCredentialsError extends Error {
     this.name = "InvalidCredentialsError";
   }
 }
+
+export class PasswordValidationError extends Error {
+  constructor(messages) {
+    super(messages.join(" "));
+    this.name = "PasswordValidationError";
+    this.messages = messages;
+  }
+}
+
+/** Standard signup password rules (client should mirror for UX). */
+export function validatePasswordStrength(password) {
+  const value = String(password ?? "");
+  const messages = [];
+
+  if (value.length < 8) {
+    messages.push("At least 8 characters.");
+  }
+  if (value.length > 128) {
+    messages.push("At most 128 characters.");
+  }
+  if (!/[a-z]/.test(value)) {
+    messages.push("At least one lowercase letter.");
+  }
+  if (!/[A-Z]/.test(value)) {
+    messages.push("At least one uppercase letter.");
+  }
+  if (!/[0-9]/.test(value)) {
+    messages.push("At least one number.");
+  }
+  if (!/[^A-Za-z0-9]/.test(value)) {
+    messages.push("At least one symbol (e.g. ! @ # $).");
+  }
+
+  return messages;
+}
+
+export function assertPasswordStrength(password) {
+  const messages = validatePasswordStrength(password);
+  if (messages.length) {
+    throw new PasswordValidationError(messages);
+  }
+}
