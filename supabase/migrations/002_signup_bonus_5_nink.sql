@@ -1,0 +1,11 @@
+-- Rail 1: 5.00 NINK signup bonus (wei = 5 * 10^18)
+-- New accounts use NINK_SIGNUP_BONUS_WEI on the API (Vercel env + packages/api/.env).
+-- Existing rows are unchanged unless you run the optional reset below.
+
+-- Optional: reset a test account to 5.00 NINK (run once in Supabase SQL Editor)
+-- update public.virtual_nink_balances
+-- set balance_wei = 5000000000000000000,
+--     updated_at = now()
+-- where user_id = (
+--   select id from public.app_users where email = 'peter@nink.com'
+-- );

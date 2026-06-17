@@ -5,6 +5,7 @@ import {
   INITIAL_USER_BALANCE_WEI,
   SESSION_TTL_MS,
 } from "./constants.mjs";
+import { hashPassword, InvalidCredentialsError, verifyPassword } from "./password.mjs";
 import { isValidEmail, normalizeEmail } from "./store.mjs";
 
 function requireSupabase() {
@@ -33,18 +34,23 @@ function mapUserRow(row, balanceWei) {
   };
 }
 
-export async function supabaseCreateOrLoginUser(email) {
+export async function supabaseCreateOrLoginUser(email, password) {
   const supabase = requireSupabase();
   const normalized = normalizeEmail(email);
   if (!isValidEmail(normalized)) {
     throw new Error("Enter a valid email address.");
   }
 
+  const plainPassword = String(password ?? "");
+  if (!plainPassword) {
+    throw new InvalidCredentialsError();
+  }
+
   const displayName = normalized.split("@")[0] || "user";
 
   let { data: userRow, error: userError } = await supabase
     .from("app_users")
-    .select("id, email, display_name, rail")
+    .select("id, email, display_name, rail, password_hash")
     .eq("email", normalized)
     .maybeSingle();
 
@@ -53,14 +59,16 @@ export async function supabaseCreateOrLoginUser(email) {
   }
 
   if (!userRow) {
+    const passwordHash = hashPassword(plainPassword);
     const insertUser = await supabase
       .from("app_users")
       .insert({
         email: normalized,
         display_name: displayName,
         rail: "closed_loop",
+        password_hash: passwordHash,
       })
-      .select("id, email, display_name, rail")
+      .select("id, email, display_name, rail, password_hash")
       .single();
 
     if (insertUser.error) {
@@ -85,6 +93,10 @@ export async function supabaseCreateOrLoginUser(email) {
       balance_after: signupBonusWei(),
       metadata: { reason: "new_account" },
     });
+  } else if (!userRow.password_hash) {
+    throw new Error("Password not set for this account. Ask an admin to run set-user-password.mjs.");
+  } else if (!verifyPassword(plainPassword, userRow.password_hash)) {
+    throw new InvalidCredentialsError();
   }
 
   const sessionToken = randomUUID();

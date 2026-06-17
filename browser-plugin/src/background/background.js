@@ -2,7 +2,6 @@ import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
 import { resolveApiBaseUrl } from "../config/apiConfig.js";
 import {
   LOCAL_DEV_ACCOUNTING,
-  STUB_ACCOUNT_ACCOUNTING,
   createMockAnchorReceipt,
 } from "../utils/devStubs.js";
 import {
@@ -15,6 +14,11 @@ import {
   readMetaMaskAddressOnTab,
 } from "../utils/walletTokenUi.js";
 import { warmInjectOpenChatTabs } from "../utils/chatTab.js";
+import { isCloudAccounting, isDemoAccounting } from "../utils/ninkAccount.js";
+import {
+  applyBalanceAfterAnchor,
+  writeAccountingToStorage,
+} from "../utils/accountingApi.js";
 
 async function getApiBaseUrl() {
   const config = await getNinkConfig();
@@ -66,15 +70,45 @@ async function getNinkConfig() {
 
 let systemAccountingState = { ...LOCAL_DEV_ACCOUNTING };
 
-async function applyAccountingState(payload) {
-  systemAccountingState = {
-    userBalance: String(payload.balance),
-    requiredFee: String(payload.feeRequirement),
-    source: payload.source || "unknown",
-    isLocalDevMode: Boolean(payload.isLocalDevMode),
-  };
+async function applyAccountingState(payload, options = {}) {
+  const accounting = await writeAccountingToStorage(
+    {
+      userBalance: String(payload.balance),
+      requiredFee: String(payload.feeRequirement),
+      source: payload.source || "unknown",
+      isLocalDevMode: Boolean(payload.isLocalDevMode),
+      updatedAt: options.updatedAt,
+      lastAnchorAt: options.lastAnchorAt,
+    },
+    {
+      fetchStartedAt: options.fetchStartedAt,
+      force: options.force,
+    }
+  );
+  systemAccountingState = accounting;
+  return accounting;
+}
 
-  await chrome.storage.local.set({ accounting: systemAccountingState });
+function shouldDiscardStaleAccountingFetch(fetchStartedAt, accounting) {
+  if (!accounting || isDemoAccounting(accounting)) {
+    return false;
+  }
+  if (!accounting.updatedAt || accounting.updatedAt <= fetchStartedAt) {
+    return false;
+  }
+  return isCloudAccounting(accounting);
+}
+
+async function reconcileStaleDemoAccounting(config, session, accounting) {
+  if (config.useDevStubs || config.useWalletMode || !session?.userId) {
+    return;
+  }
+
+  if (!isDemoAccounting(accounting)) {
+    return;
+  }
+
+  // Replace demo data on the next successful fetch — do not clear before then.
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -125,8 +159,11 @@ async function fetchAccountingParameters() {
     return;
   }
 
+  await reconcileStaleDemoAccounting(config, session, stored.accounting);
+
   const apiBase = await getApiBaseUrl();
   const accountingUrl = `${apiBase}/v1/accounting/parameters?user=${encodeURIComponent(session.userId)}`;
+  const fetchStartedAt = Date.now();
 
   try {
     if (config.useLocalApi !== false) {
@@ -148,22 +185,35 @@ async function fetchAccountingParameters() {
       );
     }
 
-    const latest = await chrome.storage.local.get("ninkSession");
+    const latest = await chrome.storage.local.get(["ninkSession", "accounting"]);
     if (!latest.ninkSession?.userId) {
       return;
     }
 
-    await applyAccountingState({
-      balance: data.balance,
-      feeRequirement: data.feeRequirement,
-      source: data.source || "nink-cloud-api",
-      isLocalDevMode: false,
-    });
+    if (shouldDiscardStaleAccountingFetch(fetchStartedAt, latest.accounting)) {
+      return;
+    }
+
+    await applyAccountingState(
+      {
+        balance: data.balance,
+        feeRequirement: data.feeRequirement,
+        source: data.source || "nink-cloud-api",
+        isLocalDevMode: false,
+      },
+      { fetchStartedAt }
+    );
     await chrome.storage.local.remove("accountingError");
   } catch (error) {
     console.warn("NINK accounting API unreachable.", error);
     if (config.useLocalApi === false) {
-      await applyAccountingState(STUB_ACCOUNT_ACCOUNTING);
+      const latest = await chrome.storage.local.get("accounting");
+      if (isDemoAccounting(latest.accounting)) {
+        await chrome.storage.local.remove("accounting");
+      }
+      await chrome.storage.local.set({
+        accountingError: error.message || "Could not refresh balance from ni.nink.com.",
+      });
       return;
     }
     await chrome.storage.local.remove("accounting");
@@ -194,13 +244,18 @@ async function anchorHashOnNetwork(stateHash, appliedFee, useDevStubs) {
     throw new Error(payload.message || `Anchor API returned ${response.status}`);
   }
 
-  if (payload.balance) {
-    await applyAccountingState({
-      balance: payload.balance,
-      feeRequirement: appliedFee,
-      source: payload.source || "nink-cloud-api",
-      isLocalDevMode: false,
-    });
+  let nextBalance = payload.balance != null ? String(payload.balance) : null;
+  if (!nextBalance) {
+    const storedAccounting = await chrome.storage.local.get("accounting");
+    const currentBalance = BigInt(storedAccounting.accounting?.userBalance || "0");
+    const fee = BigInt(String(appliedFee || "0"));
+    if (fee > 0n && currentBalance >= fee) {
+      nextBalance = (currentBalance - fee).toString();
+    }
+  }
+
+  if (nextBalance) {
+    await applyBalanceAfterAnchor(nextBalance, appliedFee);
   }
 
   return {
@@ -209,6 +264,7 @@ async function anchorHashOnNetwork(stateHash, appliedFee, useDevStubs) {
     source: payload.source || "nink-cloud-relayer",
     isLocalDevMode: false,
     onChain: payload.onChain ?? true,
+    balanceAfter: nextBalance,
   };
 }
 
@@ -307,27 +363,17 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "LOGIN_NINK_ACCOUNT") {
     (async () => {
       const email = String(request.email || "").trim().toLowerCase();
+      const password = String(request.password || "");
       if (!email || !email.includes("@")) {
         sendResponse({ status: "ERROR", message: "Enter a valid email address." });
         return;
       }
-
-      const config = await getNinkConfig();
-      if (config.useDevStubs) {
-        await chrome.storage.local.set({
-          ninkSession: {
-            userId: email,
-            email,
-            displayName: email.split("@")[0] || "user",
-            loggedInAt: new Date().toISOString(),
-            stub: true,
-          },
-        });
-        await fetchAccountingParameters();
-        sendResponse({ status: "SUCCESS" });
+      if (!password) {
+        sendResponse({ status: "ERROR", message: "Enter your password." });
         return;
       }
 
+      const config = await getNinkConfig();
       const apiBase = await getApiBaseUrl();
       if (config.useLocalApi !== false) {
         await verifyNinkApiHealth(apiBase);
@@ -336,7 +382,7 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       const response = await fetch(`${apiBase}/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, password }),
       });
       const payload = await response.json().catch(() => ({}));
 
@@ -359,6 +405,16 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
           stub: false,
         },
       });
+      await applyAccountingState(
+        {
+          balance: payload.balance,
+          feeRequirement: payload.feeRequirement,
+          source: "nink-cloud-api",
+          isLocalDevMode: false,
+        },
+        { updatedAt: Date.now() }
+      );
+      await chrome.storage.local.remove("accountingError");
       sendResponse({ status: "SUCCESS" });
       fetchAccountingParameters().catch((error) => {
         console.warn("Post-login accounting refresh failed:", error);
@@ -449,12 +505,18 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "ANCHOR_HASH") {
     (async () => {
       const config = await getNinkConfig();
+      const useDevStubs =
+        request.useDevStubs !== undefined ? Boolean(request.useDevStubs) : config.useDevStubs;
       const receipt = await anchorHashOnNetwork(
         request.stateHash,
         request.appliedFee,
-        config.useDevStubs
+        useDevStubs
       );
-      sendResponse({ status: "SUCCESS", receipt });
+      sendResponse({
+        status: "SUCCESS",
+        receipt,
+        balanceAfter: receipt.balanceAfter ?? null,
+      });
     })().catch((error) => {
       sendResponse({ status: "ERROR", message: error.toString() });
     });

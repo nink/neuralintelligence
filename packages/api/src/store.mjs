@@ -7,6 +7,7 @@ import {
   SESSION_TTL_MS,
   STORE_PATH,
 } from "./constants.mjs";
+import { hashPassword, InvalidCredentialsError, verifyPassword } from "./password.mjs";
 
 function emptyStore() {
   return {
@@ -68,8 +69,13 @@ export function getUserById(store, userId) {
   return store.users[normalizeEmail(userId)] || null;
 }
 
-export function createOrLoginUser(store, email) {
+export function createOrLoginUser(store, email, password) {
   const userId = normalizeEmail(email);
+  const plainPassword = String(password ?? "");
+  if (!plainPassword) {
+    throw new InvalidCredentialsError();
+  }
+
   let user = store.users[userId];
 
   if (!user) {
@@ -78,10 +84,15 @@ export function createOrLoginUser(store, email) {
       email: userId,
       displayName: userId.split("@")[0] || "user",
       balanceWei: INITIAL_USER_BALANCE_WEI,
+      passwordHash: hashPassword(plainPassword),
       createdAt: new Date().toISOString(),
       sessions: {},
     };
     store.users[userId] = user;
+  } else if (!user.passwordHash) {
+    throw new Error("Password not set for this account.");
+  } else if (!verifyPassword(plainPassword, user.passwordHash)) {
+    throw new InvalidCredentialsError();
   }
 
   const sessionToken = randomUUID();

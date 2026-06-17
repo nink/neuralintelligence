@@ -23,6 +23,10 @@
           <span class="login-label">Email</span>
           <input id="login-email-input" type="email" placeholder="you@example.com" autocomplete="username">
         </label>
+        <label class="login-field">
+          <span class="login-label">Password</span>
+          <input id="login-password-input" type="password" placeholder="Password" autocomplete="current-password">
+        </label>
         <button id="login-stub-btn" type="button" class="secondary-btn login-btn">Sign in</button>
       </div>
       <div id="account-logged-in" hidden>
@@ -81,6 +85,11 @@
         <input id="dev-stub-toggle" type="checkbox">
         <span>Mock mode — skip blockchain entirely</span>
       </label>
+      <label class="dev-toggle">
+        <input id="local-api-toggle" type="checkbox">
+        <span>Use local dev API (127.0.0.1:8787) instead of ni.nink.com</span>
+      </label>
+      <p id="api-endpoint-label" class="onchain-note"></p>
     </details>
 
     <div id="status-console" class="status-console" role="status"></div>

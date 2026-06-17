@@ -21,6 +21,18 @@ Do **not** launch public Rail 1 or Rail 2 until the relevant gates pass. See [`P
 - [x] Audit record / timeline renders for captured sessions
 - [ ] Viewer displays Rail 1 `proofId` vs Rail 2 `transactionHash` distinctly (label polish)
 
+### Gate S3 — Encryption & key custody (future — enterprise)
+
+See [`REQUIREMENTS-ENCRYPTION-KEY-CUSTODY.md`](REQUIREMENTS-ENCRYPTION-KEY-CUSTODY.md). **Not required for Rail 1 v1 consumer launch.**
+
+- [ ] **S3-A Escrow:** Wrap session AES key with NINK public key; store `escrow_key_blob` + version on every anchored sign-off
+- [ ] **S3-B Custody record:** Append-only `key_custody_records` linked to `proof_id` — answer “where is the key?” without user testimony
+- [ ] **S3-C Key separation:** Session keys (`NINK-SESSION-*`) vs API keys (`NINK-API-{org}-*`) — separate tables, rotation, and docs
+- [ ] **S3-D Break-glass:** HSM unwrap service, dual control, immutable access log (legal / enterprise DPA)
+- [ ] **S3-E Plain export (optional):** Advanced toggle for unencrypted export; org policy can disable
+- [ ] **S3-F Enterprise policy:** `require_encryption`, `require_escrow`, `forbid_plain_export` enforced at sign-off API
+- [ ] **S3-G UX:** Post-sign-off custody summary in popup (proof ID, escrow tier, “not an API key”)
+
 ---
 
 ## Rail 1 — Virtual NINK (default users) — **ship first**
@@ -118,6 +130,7 @@ The following were achieved on **`pre-dual-rail-2026-06`** / **`archive/single-r
 1. ~~Shared product (Gates S1–S2 core)~~ — done on archive branch
 2. **Rail 1** — Gates R1-A through R1-E
 3. **Rail 2** — Gates R2-A through R2-E (reuse archived wallet/contract work)
+4. **Enterprise encryption** — Gates S3-A through S3-G (after Rail 1 stable)
 
 ---
 

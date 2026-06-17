@@ -25,7 +25,9 @@
                     └──────────────────────┘
 ```
 
-**Rule:** Raw conversation text and attachment bytes never leave the browser unencrypted.
+**Rule:** Raw conversation text and attachment bytes never leave the browser unencrypted (default Mode A/C). Plain export (Mode B) is opt-in only when policy allows.
+
+Future **escrow + Key Custody Records** ensure enterprises can always answer *where the session key is* — see [`REQUIREMENTS-ENCRYPTION-KEY-CUSTODY.md`](REQUIREMENTS-ENCRYPTION-KEY-CUSTODY.md).
 
 ## Billing rails (June 2026 pivot)
 

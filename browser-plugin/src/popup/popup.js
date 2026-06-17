@@ -1,9 +1,9 @@
 import { hasSufficientBalance, formatTokenForDisplay } from "../utils/tokenMath.js";
-import { LOCAL_DEV_ACCOUNTING, STUB_ACCOUNT_ACCOUNTING } from "../utils/devStubs.js";
+import { LOCAL_DEV_ACCOUNTING } from "../utils/devStubs.js";
 import { isSupportedChatUrl } from "../config/chatPlatforms.js";
 import { resolveChatTabForSignOff, ensureScraperReadyOnTab } from "../utils/chatTab.js";
 import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
-import { resolveApiBaseUrl } from "../config/apiConfig.js";
+import { resolveApiBaseUrl, NINK_API_CONFIG } from "../config/apiConfig.js";
 import { getOnChainWalletSnapshot, readChainHealth } from "../utils/tokenBalance.js";
 import {
   requestWalletConnectOnTab,
@@ -12,9 +12,49 @@ import {
 import { validateSignOffReady } from "../signoff/runSignOffPipeline.js";
 import {
   formatAccountLabel,
+  isCloudAccounting,
+  isDemoAccounting,
   isValidStubEmail,
   normalizeAccountEmail,
+  readLastLoginEmail,
+  saveLastLoginEmail,
 } from "../utils/ninkAccount.js";
+import {
+  fetchCloudAccountingParameters,
+  writeAccountingToStorage,
+} from "../utils/accountingApi.js";
+
+let popupAccountingRefresh = null;
+
+async function ensureAccountingFresh(config, session) {
+  if (config.useDevStubs || config.useWalletMode || !session?.sessionToken) {
+    return null;
+  }
+
+  if (popupAccountingRefresh) {
+    return popupAccountingRefresh;
+  }
+
+  popupAccountingRefresh = (async () => {
+    const fetchStartedAt = Date.now();
+    const accounting = await fetchCloudAccountingParameters(config, session);
+    return writeAccountingToStorage(
+      { ...accounting, updatedAt: Date.now() },
+      { fetchStartedAt }
+    );
+  })()
+    .catch(async (error) => {
+      await chrome.storage.local.set({
+        accountingError: error.message || "Could not refresh balance.",
+      });
+      throw error;
+    })
+    .finally(() => {
+      popupAccountingRefresh = null;
+    });
+
+  return popupAccountingRefresh;
+}
 
 async function verifyNinkApiHealth(apiBase) {
   const response = await fetch(`${apiBase}/health`);
@@ -32,20 +72,13 @@ async function verifyNinkApiHealth(apiBase) {
   }
 }
 
-async function loginAccountFromPopup(email) {
+async function loginAccountFromPopup(email, password) {
   const stored = await readLocalStorage(["ninkConfig"]);
   const config = { ...DEFAULT_NINK_CONFIG, ...stored.ninkConfig };
   const normalizedEmail = normalizeAccountEmail(email);
 
-  if (config.useDevStubs) {
-    const response = await sendBackgroundMessage({
-      action: "LOGIN_NINK_ACCOUNT",
-      email: normalizedEmail,
-    });
-    if (response?.status !== "SUCCESS") {
-      throw new Error(response?.message || "Sign-in failed.");
-    }
-    return normalizedEmail;
+  if (!password) {
+    throw new Error("Enter your password.");
   }
 
   const apiBase = resolveApiBaseUrl(config);
@@ -56,7 +89,7 @@ async function loginAccountFromPopup(email) {
   const response = await fetch(`${apiBase}/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: normalizedEmail }),
+    body: JSON.stringify({ email: normalizedEmail, password }),
   });
   const payload = await response.json().catch(() => ({}));
 
@@ -79,9 +112,11 @@ async function loginAccountFromPopup(email) {
       requiredFee: String(payload.feeRequirement),
       source: "nink-cloud-api",
       isLocalDevMode: false,
+      updatedAt: Date.now(),
     },
   });
   await chrome.storage.local.remove("accountingError");
+  await saveLastLoginEmail(normalizedEmail);
 
   return payload.user.email || normalizedEmail;
 }
@@ -90,6 +125,7 @@ function getConfigFlags(ninkConfig = {}) {
   return {
     useDevStubs: ninkConfig.useDevStubs ?? DEFAULT_NINK_CONFIG.useDevStubs,
     useWalletMode: ninkConfig.useWalletMode ?? DEFAULT_NINK_CONFIG.useWalletMode,
+    useLocalApi: ninkConfig.useLocalApi ?? DEFAULT_NINK_CONFIG.useLocalApi,
   };
 }
 
@@ -120,15 +156,22 @@ async function refreshAccountPanel() {
 
   accountPanel.hidden = false;
 
-  const stored = await readLocalStorage(["accounting", "ninkSession", "accountingError"]);
+  const stored = await readLocalStorage(["accounting", "ninkSession", "accountingError", "ninkConfig"]);
   const session = stored.ninkSession;
   const accounting = stored.accounting;
   const accountingError = stored.accountingError;
+  const config = { ...DEFAULT_NINK_CONFIG, ...stored.ninkConfig };
+  const apiBase = resolveApiBaseUrl(config);
 
   if (!session?.userId) {
     loggedOut.hidden = false;
     loggedIn.hidden = true;
     signOffButton.disabled = true;
+    const lastEmail = await readLastLoginEmail();
+    const emailInput = document.getElementById("login-email-input");
+    if (emailInput && lastEmail) {
+      emailInput.value = lastEmail;
+    }
     return;
   }
 
@@ -136,22 +179,39 @@ async function refreshAccountPanel() {
   loggedIn.hidden = false;
   sessionLabel.textContent = formatAccountLabel(session);
 
-  if (!accounting) {
+  if (!session.sessionToken && !config.useDevStubs) {
     balanceEl.textContent = "—";
     feeEl.textContent = "—";
     sourceLabel.textContent =
-      accountingError ||
-      "Fetching balance… start Gate 4 API: cd packages/api && npm run dev";
+      "Session expired — sign out, then sign in again (Mock mode must be off).";
+    signOffButton.disabled = true;
+    return;
+  }
+
+  const needsCloudRefresh =
+    !config.useDevStubs &&
+    !config.useWalletMode &&
+    session.sessionToken &&
+    (!accounting || isDemoAccounting(accounting));
+
+  if (needsCloudRefresh) {
+    ensureAccountingFresh(config, session).catch(() => {});
+  }
+
+  if (!accounting || (isDemoAccounting(accounting) && !config.useDevStubs)) {
+    balanceEl.textContent = "—";
+    feeEl.textContent = "—";
+    sourceLabel.textContent =
+      accountingError || `Fetching balance from ${apiBase}…`;
     signOffButton.disabled = true;
     return;
   }
 
   balanceEl.textContent = `${formatTokenForDisplay(accounting.userBalance)} NINK`;
   feeEl.textContent = formatTokenForDisplay(accounting.requiredFee);
-  sourceLabel.textContent =
-    accounting.source === "production-api" || accounting.source === "nink-cloud-api"
-      ? "Balance from your NINK account."
-      : "Stale demo balance — sign out, start packages/api, sign in again.";
+  sourceLabel.textContent = isCloudAccounting(accounting)
+    ? `Balance from your NINK account (${apiBase}).`
+    : accountingError || "Could not verify balance — try signing out and in again.";
 
   signOffButton.disabled = !hasSufficientBalance(
     accounting.userBalance,
@@ -300,10 +360,19 @@ async function updateUI() {
   try {
     const stored = await readLocalStorage(["accounting", "ninkConfig", "ninkSession"]);
     const accounting = stored.accounting;
-    const { useDevStubs, useWalletMode } = getConfigFlags(stored.ninkConfig || {});
+    const config = { ...DEFAULT_NINK_CONFIG, ...stored.ninkConfig };
+    const { useDevStubs, useWalletMode, useLocalApi } = getConfigFlags(stored.ninkConfig || {});
 
     document.getElementById("dev-stub-toggle").checked = useDevStubs;
     document.getElementById("wallet-mode-toggle").checked = useWalletMode;
+    document.getElementById("local-api-toggle").checked = useLocalApi;
+
+    const apiEndpointLabel = document.getElementById("api-endpoint-label");
+    if (apiEndpointLabel) {
+      apiEndpointLabel.textContent = useLocalApi
+        ? `API: ${NINK_API_CONFIG.localDevBaseUrl}`
+        : `API: ${NINK_API_CONFIG.productionBaseUrl}`;
+    }
 
     document.getElementById("account-panel").hidden = useDevStubs || useWalletMode;
     document.getElementById("onchain-panel").hidden = !useWalletMode || useDevStubs;
@@ -343,9 +412,10 @@ async function updateUI() {
 
 updateUI();
 refreshSignOffStatusFromStorage();
-readLocalStorage(["ninkSession"]).then((stored) => {
-  if (stored.ninkSession?.userId) {
-    sendBackgroundMessage({ action: "REFRESH_ACCOUNTING" }).catch(() => {});
+readLocalStorage(["ninkSession", "ninkConfig"]).then((stored) => {
+  const config = { ...DEFAULT_NINK_CONFIG, ...stored.ninkConfig };
+  if (stored.ninkSession?.userId && !config.useDevStubs && !config.useWalletMode) {
+    ensureAccountingFresh(config, stored.ninkSession).catch(() => {});
   }
 });
 sendBackgroundMessage({ action: "WARM_INJECT_CHAT_TABS" }).catch(() => {});
@@ -381,9 +451,15 @@ async function loginStubFromPopup() {
   const statusConsole = document.getElementById("status-console");
   const loginBtn = document.getElementById("login-stub-btn");
   const email = document.getElementById("login-email-input").value;
+  const password = document.getElementById("login-password-input").value;
 
   if (!isValidStubEmail(email)) {
     statusConsole.innerText = "Error: Enter a valid email address.";
+    return;
+  }
+
+  if (!password) {
+    statusConsole.innerText = "Error: Enter your password.";
     return;
   }
 
@@ -391,8 +467,9 @@ async function loginStubFromPopup() {
     loginBtn.disabled = true;
     statusConsole.innerText = "Signing in…";
 
-    const signedInEmail = await loginAccountFromPopup(email);
+    const signedInEmail = await loginAccountFromPopup(email, password);
     statusConsole.innerText = `Signed in as ${signedInEmail}`;
+    document.getElementById("login-password-input").value = "";
     await updateUI();
   } catch (error) {
     statusConsole.innerText = `Error: ${error.message}`;
@@ -405,11 +482,20 @@ async function loginStubFromPopup() {
 async function logoutStubFromPopup() {
   const statusConsole = document.getElementById("status-console");
   const logoutBtn = document.getElementById("logout-stub-btn");
+  const emailInput = document.getElementById("login-email-input");
+  const passwordInput = document.getElementById("login-password-input");
 
   try {
     logoutBtn.disabled = true;
     statusConsole.innerText = "Signing out…";
     signOffInProgress = false;
+
+    const sessionStored = await readLocalStorage(["ninkSession"]);
+    const emailToKeep =
+      normalizeAccountEmail(emailInput?.value) || sessionStored.ninkSession?.email || "";
+    if (emailToKeep) {
+      await saveLastLoginEmail(emailToKeep);
+    }
 
     await chrome.storage.local.remove([
       "ninkSession",
@@ -425,6 +511,13 @@ async function logoutStubFromPopup() {
       // Local storage already cleared above.
     }
 
+    if (emailInput && emailToKeep) {
+      emailInput.value = emailToKeep;
+    }
+    if (passwordInput) {
+      passwordInput.value = "";
+    }
+
     statusConsole.innerText = "Signed out.";
     await updateUI();
   } catch (error) {
@@ -437,6 +530,11 @@ async function logoutStubFromPopup() {
 document.getElementById("login-stub-btn").addEventListener("click", loginStubFromPopup);
 document.getElementById("logout-stub-btn").addEventListener("click", logoutStubFromPopup);
 document.getElementById("login-email-input").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    loginStubFromPopup();
+  }
+});
+document.getElementById("login-password-input").addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     loginStubFromPopup();
   }
@@ -547,6 +645,31 @@ document.getElementById("wallet-mode-toggle").addEventListener("change", async (
     statusConsole.innerText = useWalletMode
       ? "Wallet mode enabled — connect MetaMask below Advanced options."
       : "Wallet mode off — sign in with your NINK account.";
+  } catch (error) {
+    statusConsole.innerText = `Error: ${error.message}`;
+  } finally {
+    updateUI();
+  }
+});
+
+document.getElementById("local-api-toggle").addEventListener("change", async (event) => {
+  const useLocalApi = event.target.checked;
+  const statusConsole = document.getElementById("status-console");
+
+  try {
+    const stored = await readLocalStorage(["ninkConfig"]);
+    const current = stored.ninkConfig || {};
+    await chrome.storage.local.set({
+      ninkConfig: {
+        ...DEFAULT_NINK_CONFIG,
+        ...current,
+        useLocalApi,
+      },
+    });
+    await sendBackgroundMessage({ action: "REFRESH_ACCOUNTING" }).catch(() => {});
+    statusConsole.innerText = useLocalApi
+      ? "Using local dev API (127.0.0.1:8787). Sign out and sign in again."
+      : "Using production API (ni.nink.com). Sign out and sign in again.";
   } catch (error) {
     statusConsole.innerText = `Error: ${error.message}`;
   } finally {

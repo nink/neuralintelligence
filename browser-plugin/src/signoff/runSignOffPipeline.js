@@ -21,6 +21,7 @@ import {
 import { NINK_CHAIN_CONFIG } from "../config/chainConfig.js";
 import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
 import { getOnChainWalletSnapshot, readChainHealth } from "../utils/tokenBalance.js";
+import { applyBalanceAfterAnchor, anchorOnCloudApi } from "../utils/accountingApi.js";
 
 function readLocalStorage(keys) {
   return new Promise((resolve, reject) => {
@@ -30,18 +31,6 @@ function readLocalStorage(keys) {
         return;
       }
       resolve(stored);
-    });
-  });
-}
-
-function sendBackgroundMessage(message) {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-      resolve(response);
     });
   });
 }
@@ -337,22 +326,22 @@ export async function triggerNinkSignOffDownloads(completedPackage, aesKeyBase64
   };
 }
 
-async function resolveAnchorReceipt(stateHash, appliedFee, useDevStubs) {
+async function resolveAnchorReceipt(stateHash, appliedFee, useDevStubs, config, session) {
   if (useDevStubs) {
     return createMockAnchorReceipt();
   }
 
-  const response = await sendBackgroundMessage({
-    action: "ANCHOR_HASH",
-    stateHash,
-    appliedFee,
-  });
+  const payload = await anchorOnCloudApi(config, session, stateHash, appliedFee);
+  await applyBalanceAfterAnchor(payload.balance, appliedFee);
 
-  if (!response || response.status !== "SUCCESS") {
-    throw new Error(response?.message || "Anchor submission failed.");
-  }
-
-  return response.receipt;
+  return {
+    txHash: payload.txHash,
+    blockNumber: payload.blockNumber ?? null,
+    source: payload.source || "nink-cloud-api",
+    isLocalDevMode: false,
+    onChain: payload.onChain ?? false,
+    balanceAfter: payload.balance,
+  };
 }
 
 export async function validateSignOffReady(useDevStubs, chatTabId) {
@@ -432,8 +421,9 @@ export async function executeSignOff(useDevStubs, chatTabId, onStatus) {
     useDevStubs,
     chatTabId
   );
-  const stored = await readLocalStorage(["accounting", "ninkSession"]);
+  const stored = await readLocalStorage(["accounting", "ninkSession", "ninkConfig"]);
   const accounting = stored.accounting;
+  const ninkConfig = { ...DEFAULT_NINK_CONFIG, ...stored.ninkConfig };
 
   if (useWalletMode) {
     onStatus?.(
@@ -526,7 +516,17 @@ export async function executeSignOff(useDevStubs, chatTabId, onStatus) {
     chainReceipt = await resolveAnchorReceipt(
       stateHash,
       accounting.requiredFee,
-      useDevStubs
+      useDevStubs,
+      ninkConfig,
+      stored.ninkSession
+    );
+    const debitedBalance = (
+      BigInt(accounting.userBalance) - BigInt(accounting.requiredFee)
+    ).toString();
+    await applyBalanceAfterAnchor(
+      debitedBalance,
+      accounting.requiredFee,
+      "local-dev-stubs"
     );
     sessionData.signOffContext.identityProofAddress = "0xUserWallet";
     sessionData.signOffContext.anchorMethod = chainReceipt.source || "local-dev-fallback";
@@ -556,7 +556,13 @@ export async function executeSignOff(useDevStubs, chatTabId, onStatus) {
     sessionData.signOffContext.anchorTimestamp = anchorTimestamp;
   } else {
     onStatus?.("Anchoring via NINK cloud…");
-    const receipt = await resolveAnchorReceipt(stateHash, accounting.requiredFee, false);
+    const receipt = await resolveAnchorReceipt(
+      stateHash,
+      accounting.requiredFee,
+      false,
+      ninkConfig,
+      stored.ninkSession
+    );
     chainReceipt = {
       txHash: receipt.txHash,
       blockNumber: receipt.blockNumber ?? null,

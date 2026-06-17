@@ -133,6 +133,22 @@ Users always interact with **NINK** as the brand. What differs is whether balanc
 
 ---
 
+## Future — encryption modes & key custody (enterprise)
+
+**Problem:** Company X requires “all files encrypted, keys stored *here*, API keys named *this way*” — when something breaks, users must not be able to say *“we don’t know where the key is.”*
+
+**Solution (planned):** Every sign-off writes a **Key Custody Record** (`proof_id` → escrow blob → key version → custody tier). Session AES keys are **wrapped for NINK Corp escrow** (HSM master key); API integration keys remain a **separate namespace** (`NINK-API-*` vs `NINK-SESSION-*`).
+
+| Mode | User | NINK decrypt? | Enterprise |
+|------|------|---------------|------------|
+| **A — Encrypted + escrow** (enterprise default) | `.nink` + `.ninkkey` | Yes, break-glass + audit | Policy-enforced |
+| **B — Plain export** (Advanced opt-in) | Readable file | N/A | Can be forbidden per org |
+| **C — User-only encrypt** (today) | `.nink` + `.ninkkey` | No | Not sufficient for “always recover” |
+
+Full spec: [`REQUIREMENTS-ENCRYPTION-KEY-CUSTODY.md`](REQUIREMENTS-ENCRYPTION-KEY-CUSTODY.md)
+
+---
+
 ## Build order (post-pivot)
 
 1. **Tag & archive** current `main` → `pre-dual-rail-2026-06` (done when this doc lands).
@@ -173,6 +189,8 @@ That snapshot includes:
 | 3 | Pack pricing | $20 CAD virtual NINK pack first |
 | 4 | Conversion minimum | TBD with counsel |
 | 5 | AI agents | Enterprise invoice + custodial pool vs per-agent wallet |
+| 6 | Escrow default for consumer vs enterprise | Enterprise ON; consumer counsel review |
+| 7 | Key retention for `escrow_key_blob` | TBD with counsel |
 
 ---
 
@@ -180,6 +198,7 @@ That snapshot includes:
 
 - [`LAUNCH-GATES.md`](LAUNCH-GATES.md) — revised dual-rail checklist
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — session trust boundaries (encryption unchanged)
+- [`REQUIREMENTS-ENCRYPTION-KEY-CUSTODY.md`](REQUIREMENTS-ENCRYPTION-KEY-CUSTODY.md) — escrow, plain export, enterprise key custody
 - [`packages/api/README.md`](packages/api/README.md) — current Gate 4 dev server (prototype for Rail 1 API shape)
 
 **Disclaimer:** This document is engineering planning, not legal advice. FINTRAC / MSB obligations require qualified Canadian compliance counsel before public launch.

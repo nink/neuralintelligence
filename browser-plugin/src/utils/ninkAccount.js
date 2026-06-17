@@ -25,3 +25,41 @@ export function formatAccountLabel(session) {
   }
   return `Signed in as ${session.email}`;
 }
+
+export async function readLastLoginEmail() {
+  const stored = await chrome.storage.local.get("lastLoginEmail");
+  return stored.lastLoginEmail ? normalizeAccountEmail(stored.lastLoginEmail) : "";
+}
+
+export async function saveLastLoginEmail(email) {
+  const normalized = normalizeAccountEmail(email);
+  if (!normalized) {
+    return;
+  }
+  await chrome.storage.local.set({ lastLoginEmail: normalized });
+}
+
+export function isCloudAccounting(accounting) {
+  const source = String(accounting?.source || "");
+  return source === "nink-cloud-api" || source === "production-api";
+}
+
+/** Demo / local-dev balances — not authoritative for ni.nink.com. */
+export function isDemoAccounting(accounting) {
+  if (!accounting) {
+    return false;
+  }
+  if (isCloudAccounting(accounting)) {
+    return false;
+  }
+  if (accounting.isLocalDevMode) {
+    return true;
+  }
+  const source = String(accounting.source || "");
+  return (
+    source.includes("stub") ||
+    source.includes("local-dev") ||
+    source.includes("fallback") ||
+    source === "unknown"
+  );
+}

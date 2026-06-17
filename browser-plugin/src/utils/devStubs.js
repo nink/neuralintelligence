@@ -2,8 +2,9 @@ export const TOKEN_DECIMALS = 18;
 export const TOKEN_DECIMALS_BI = 18n;
 export const TOKEN_SCALE = 10n ** TOKEN_DECIMALS_BI;
 
-export const MOCK_BALANCE_WEI = (100n * TOKEN_SCALE).toString();
-export const MOCK_FEE_WEI = (5n * (10n ** 14n)).toString();
+/** Matches Rail 1 signup bonus (5.00 NINK) and anchor fee (0.01 NINK). */
+export const MOCK_BALANCE_WEI = (5n * TOKEN_SCALE).toString();
+export const MOCK_FEE_WEI = (10n ** 16n).toString();
 
 export const LOCAL_DEV_ACCOUNTING = {
   balance: MOCK_BALANCE_WEI,

@@ -41,7 +41,7 @@ export function hasSufficientBalance(balance, cost) {
   return compareTokenAmounts(balance, cost) >= 0;
 }
 
-export function formatTokenForDisplay(value, fractionDigits = 4) {
+export function formatTokenForDisplay(value, fractionDigits = 2) {
   const units = parseTokenAmount(value);
   if (units === null) {
     return String(value ?? "0");

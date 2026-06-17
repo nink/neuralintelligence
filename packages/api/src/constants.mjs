@@ -8,7 +8,10 @@ export const HOST = process.env.NINK_API_HOST || "127.0.0.1";
 
 export const TOKEN_DECIMALS = 18;
 export const TOKEN_SCALE = 10n ** 18n;
-export const INITIAL_USER_BALANCE_WEI = (100n * TOKEN_SCALE).toString();
+/** 5.00 NINK signup bonus (Rail 1 virtual ledger). */
+export const SIGNUP_BONUS_WEI = (5n * TOKEN_SCALE).toString();
+export const INITIAL_USER_BALANCE_WEI = SIGNUP_BONUS_WEI;
+/** 0.01 NINK per sign-off anchor. */
 export const ANCHOR_FEE_WEI = (10n ** 16n).toString();
 
 export const STORE_PATH =

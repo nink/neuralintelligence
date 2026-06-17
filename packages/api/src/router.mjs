@@ -1,4 +1,5 @@
 import { ANCHOR_FEE_WEI } from "./constants.mjs";
+import { InvalidCredentialsError } from "./password.mjs";
 import {
   anchorForUser,
   createOrLoginUser,
@@ -35,9 +36,9 @@ export function createStoreAdapter() {
         const relayer = await warmRelayer();
         return { relayer };
       },
-      async createOrLoginUser(email) {
+      async createOrLoginUser(email, password) {
         const store = loadStore();
-        const result = createOrLoginUser(store, email);
+        const result = createOrLoginUser(store, email, password);
         saveStore(store);
         return result;
       },
@@ -111,8 +112,8 @@ export function createStoreAdapter() {
       const relayer = await warmRelayer();
       return { database, relayer };
     },
-    async createOrLoginUser(email) {
-      return supabaseCreateOrLoginUser(email);
+    async createOrLoginUser(email, password) {
+      return supabaseCreateOrLoginUser(email, password);
     },
     async getUserByToken(token) {
       return supabaseGetUserByToken(token);
@@ -257,7 +258,10 @@ export async function handleApiRequest(req, res) {
         return;
       }
 
-      const { user, sessionToken, expiresAt } = await adapter.createOrLoginUser(email);
+      const { user, sessionToken, expiresAt } = await adapter.createOrLoginUser(
+        email,
+        body.password
+      );
       sendJson(res, 200, {
         status: "SUCCESS",
         user: {
@@ -271,6 +275,10 @@ export async function handleApiRequest(req, res) {
         feeRequirement: ANCHOR_FEE_WEI,
       });
     } catch (error) {
+      if (error instanceof InvalidCredentialsError) {
+        sendJson(res, 401, { status: "ERROR", message: error.message });
+        return;
+      }
       sendJson(res, 500, { status: "ERROR", message: error.message });
     }
     return;
