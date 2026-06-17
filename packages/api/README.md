@@ -1,8 +1,11 @@
-# NINK cloud API (Gate 4)
+# NINK cloud API (Rail 1)
 
-Local development server for NINK account auth, balance accounting, and session anchoring.
+Local dev server and **Vercel deployment** for virtual NINK (Supabase PostgreSQL).
 
-## Endpoints
+**Production:** https://ni.nink.com  
+**Deploy guide:** [`DEPLOY.md`](DEPLOY.md)
+
+## Quick start (local JSON store)
 
 | Method | Path | Purpose |
 |--------|------|---------|

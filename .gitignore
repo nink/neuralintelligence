@@ -2,6 +2,8 @@
 Thumbs.db
 .env
 .env.*
+!.env.example
+!**/.env.example
 *.local
 node_modules/
 packages/contracts/node_modules/
@@ -11,3 +13,5 @@ packages/contracts/typechain-types/
 packages/contracts/coverage/
 packages/contracts/.env
 browser-plugin/node_modules/
+packages/api/node_modules/
+packages/api/.env

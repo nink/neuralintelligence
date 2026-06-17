@@ -4,9 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "node src/server.mjs",
-    "start": "node src/server.mjs"
+    "start": "node src/server.mjs",
+    "vercel:deploy": "vercel --prod"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
     "ethers": "^6.16.0"
   }
 }

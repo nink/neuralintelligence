@@ -32,6 +32,7 @@
     "https://*.infura.io/*",
     "https://*.alchemy.com/*",
     "https://api.nink.network/*",
+    "https://ni.nink.com/*",
     "https://*/*",
     "http://localhost/*",
     "http://127.0.0.1/*"

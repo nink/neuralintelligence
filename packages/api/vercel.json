@@ -1,0 +1,5 @@
+{
+  "version": 2,
+  "name": "nink-neural-intelligence-api",
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
+}

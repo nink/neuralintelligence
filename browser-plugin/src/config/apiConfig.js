@@ -1,5 +1,5 @@
 export const NINK_API_CONFIG = {
-  productionBaseUrl: "https://api.nink.network",
+  productionBaseUrl: "https://ni.nink.com",
   localDevBaseUrl: "http://127.0.0.1:8787",
 };
 
