@@ -132,7 +132,8 @@ Payment processor (Stripe) for $20 NINK packs — next slice after API is live o
 
 | Issue | Fix |
 |-------|-----|
-| `/health` 500 | Check service role key; confirm migration ran |
+| `/health` 500 `Invalid API key` | Wrong key in Vercel — use **service_role** (secret) from Supabase → Settings → API, not the `anon` key |
+| Root `/` shows Not found | Fixed in latest deploy — shows service info; use `/health` to verify Supabase |
 | `function debit_virtual_nink_anchor does not exist` | Re-run SQL migration |
 | Extension CORS errors | API sends `Access-Control-Allow-Origin: *` |
 | Hobby plan function limit | Single catch-all `/api` handler (one serverless function) |

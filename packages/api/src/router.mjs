@@ -227,6 +227,15 @@ export async function handleApiRequest(req, res) {
     return;
   }
 
+  if (method === "GET" && pathname === "/") {
+    sendJson(res, 200, {
+      status: "ok",
+      service: "nink-api",
+      docs: "GET /health · POST /v1/auth/login · GET /v1/accounting/parameters · POST /v1/blockchain/anchor",
+    });
+    return;
+  }
+
   if (method === "GET" && pathname === "/health") {
     const extra = await adapter.healthExtra();
     sendJson(res, 200, {
