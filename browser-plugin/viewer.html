@@ -60,17 +60,6 @@
       background: rgba(255, 255, 255, 0.02);
       text-align: center;
       transition: border-color 0.15s ease, background 0.15s ease;
-      position: relative;
-      display: block;
-      cursor: pointer;
-    }
-
-    .dropzone-input {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
       cursor: pointer;
     }
 
@@ -86,8 +75,36 @@
     }
 
     .dropzone span {
+      display: block;
       color: var(--muted);
       font-size: 0.88rem;
+      margin-bottom: 14px;
+    }
+
+    .choose-files-btn {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(79, 140, 255, 0.16);
+      color: var(--text);
+      padding: 10px 18px;
+      font-size: 0.92rem;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    .choose-files-btn:hover {
+      background: rgba(79, 140, 255, 0.28);
+    }
+
+    .dropzone-status {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      min-height: 1.2em;
+    }
+
+    .file-input-hidden {
+      display: none !important;
     }
 
     .panel {
@@ -473,11 +490,13 @@
       <p>Drop a signed <code>.nink</code> and matching <code>.ninkkey</code> to decrypt locally. Cloud packages can also be unlocked with credits when signed in.</p>
     </header>
 
-    <label id="dropzone" class="dropzone" for="file-input">
+    <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Upload NINK session files">
       <strong>Drop session files here</strong>
-      <span>Click to choose files, or drag both <code>.nink</code> and <code>.ninkkey</code> together</span>
-      <input id="file-input" class="dropzone-input" type="file" accept=".nink,.ninkkey" multiple>
-    </label>
+      <span>Drag both <code>.nink</code> and <code>.ninkkey</code> together, or choose them below</span>
+      <button id="choose-files-btn" type="button" class="choose-files-btn">Choose .nink + .ninkkey files</button>
+      <p id="dropzone-status" class="dropzone-status"></p>
+      <input id="file-input" class="file-input-hidden" type="file" accept=".nink,.ninkkey" multiple>
+    </div>
 
     <div id="error-banner" class="error-banner hidden" role="alert"></div>
 
@@ -556,6 +575,8 @@
 
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("file-input");
+    const chooseFilesBtn = document.getElementById("choose-files-btn");
+    const dropzoneStatus = document.getElementById("dropzone-status");
     const keyStatus = document.getElementById("key-status");
     const decryptButton = document.getElementById("decrypt-btn");
     const errorBanner = document.getElementById("error-banner");
@@ -866,7 +887,7 @@
       return keyLower === `${stem}.ninkkey` || keyLower.startsWith(`${stem}.`);
     }
 
-    function applyPendingKey(sourceLabel, autoDecrypt = true) {
+    async function applyPendingKey(sourceLabel, autoDecrypt = true) {
       if (!pendingKey?.keyText) {
         return false;
       }
@@ -885,10 +906,10 @@
       }
 
       if (autoDecrypt && loadedSecretKey && loadedSession?.encryptedPayload) {
-        handleDecrypt();
+        await handleDecrypt();
       }
 
-      refreshCloudAccessPanel();
+      await refreshCloudAccessPanel();
 
       return true;
     }
@@ -973,7 +994,7 @@
       }
 
       if (pendingKey?.keyText && keyMatchesNink(ninkFileName, pendingKey.fileName)) {
-        applyPendingKey(`Loaded ${pendingKey.fileName}`, true);
+        await applyPendingKey(`Loaded ${pendingKey.fileName}`, true);
         return true;
       }
 
@@ -1005,47 +1026,72 @@
       clearError();
 
       if (loadedSession?.encryptedPayload) {
-        applyPendingKey(`Loaded ${file.name}`, true);
+        await applyPendingKey(`Loaded ${file.name}`, true);
         return;
       }
 
       setKeyStatus(`Loaded ${file.name}. Drop the matching .nink file above to decrypt locally.`, true);
     }
 
+    function setDropzoneStatus(message) {
+      dropzoneStatus.textContent = message || "";
+    }
+
+    function openFilePicker() {
+      clearError();
+      fileInput.value = "";
+      fileInput.click();
+    }
+
     async function processIncomingFiles(files) {
       const list = Array.from(files || []);
-      const { ninkFile, keyFile } = splitIncomingFiles(list);
+      if (!list.length) {
+        return;
+      }
 
-      if (!ninkFile) {
-        const keyOnly = list.find((file) => isNinkKeyName(file.name));
-        if (keyOnly) {
-          await loadKeyFromUserFile(keyOnly);
+      setDropzoneStatus(`Loading ${list.length} file(s)…`);
+
+      try {
+        const { ninkFile, keyFile } = splitIncomingFiles(list);
+
+        if (!ninkFile) {
+          const keyOnly = list.find((file) => isNinkKeyName(file.name));
+          if (keyOnly) {
+            await loadKeyFromUserFile(keyOnly);
+            setDropzoneStatus(`Loaded ${keyOnly.name}. Now add the matching .nink file.`);
+            return;
+          }
+
+          showError("Attach a .nink archive (and matching .ninkkey if you have it).");
+          setDropzoneStatus("");
           return;
         }
 
-        showError("Attach a .nink archive (and matching .ninkkey if you have it).");
-        return;
+        clearError();
+        loadedNinkFileName = ninkFile.name;
+        const text = await ninkFile.text();
+        resetConversationView();
+
+        if (!loadSessionFromText(text)) {
+          loadedNinkFileName = "";
+          setDropzoneStatus("");
+          return;
+        }
+
+        await attemptAutoLoadKey(loadedNinkFileName, keyFile);
+        setDropzoneStatus(`Loaded ${loadedNinkFileName}${keyFile ? ` + ${keyFile.name}` : ""}.`);
+      } catch (error) {
+        showError(error.message || "Could not load session files.");
+        setDropzoneStatus("");
       }
-
-      clearError();
-      loadedNinkFileName = ninkFile.name;
-      const text = await ninkFile.text();
-      resetConversationView();
-
-      if (!loadSessionFromText(text)) {
-        loadedNinkFileName = "";
-        return;
-      }
-
-      await attemptAutoLoadKey(loadedNinkFileName, keyFile);
     }
 
-    function handleIncomingFileSelection(event) {
-      const files = event.target?.files;
-      if (!files?.length) {
+    async function handleIncomingFileSelection(event) {
+      const list = Array.from(event.target?.files || []);
+      if (!list.length) {
         return;
       }
-      processIncomingFiles(files);
+      await processIncomingFiles(list);
       fileInput.value = "";
     }
 
@@ -1970,26 +2016,56 @@
       clearError();
     }
 
+    dropzone.addEventListener("click", (event) => {
+      if (event.target.closest("#choose-files-btn")) {
+        return;
+      }
+      openFilePicker();
+    });
+
+    chooseFilesBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openFilePicker();
+    });
+
+    dropzone.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openFilePicker();
+      }
+    });
+
     dropzone.addEventListener("dragover", (event) => {
       event.preventDefault();
+      event.stopPropagation();
       event.dataTransfer.dropEffect = "copy";
       dropzone.classList.add("dragover");
     });
 
-    dropzone.addEventListener("dragleave", () => {
-      dropzone.classList.remove("dragover");
+    dropzone.addEventListener("dragleave", (event) => {
+      if (event.currentTarget === event.target) {
+        dropzone.classList.remove("dragover");
+      }
     });
 
     dropzone.addEventListener("drop", (event) => {
       event.preventDefault();
+      event.stopPropagation();
       dropzone.classList.remove("dragover");
       if (!event.dataTransfer?.files?.length) {
+        showError("Drop did not include any files.");
         return;
       }
       processIncomingFiles(event.dataTransfer.files);
     });
 
-    fileInput.addEventListener("change", handleIncomingFileSelection);
+    fileInput.addEventListener("change", (event) => {
+      handleIncomingFileSelection(event).catch((error) => {
+        showError(error.message || "Could not read selected files.");
+        setDropzoneStatus("");
+      });
+    });
 
     decryptButton.addEventListener("click", handleDecrypt);
     cloudOpenBtn.addEventListener("click", handleCloudOpen);
