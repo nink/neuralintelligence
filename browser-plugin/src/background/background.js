@@ -14,6 +14,7 @@ import {
   readMetaMaskAddressOnTab,
 } from "../utils/walletTokenUi.js";
 import { warmInjectOpenChatTabs } from "../utils/chatTab.js";
+import { openSessionViewerWindow, openFilePickerWindow, appendViewerDebugLog } from "../utils/openViewer.js";
 import { isCloudAccounting, isDemoAccounting } from "../utils/ninkAccount.js";
 import {
   applyBalanceAfterAnchor,
@@ -294,6 +295,42 @@ async function fetchImageAsBase64(url) {
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "PING") {
     sendResponse({ status: "OK" });
+    return true;
+  }
+
+  if (request.action === "OPEN_FILE_PICKER") {
+    (async () => {
+      try {
+        const result = await openFilePickerWindow();
+        sendResponse({ status: "SUCCESS", windowId: result?.id ?? null });
+      } catch (error) {
+        await appendViewerDebugLog("OPEN_FILE_PICKER_BG_ERROR", {
+          message: error?.message || String(error),
+        });
+        sendResponse({
+          status: "ERROR",
+          message: error?.message || String(error),
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (request.action === "OPEN_VIEWER") {
+    (async () => {
+      try {
+        const result = await openSessionViewerWindow();
+        sendResponse({ status: "SUCCESS", ...result });
+      } catch (error) {
+        await appendViewerDebugLog("OPEN_VIEWER_BG_ERROR", {
+          message: error?.message || String(error),
+        });
+        sendResponse({
+          status: "ERROR",
+          message: error?.message || String(error),
+        });
+      }
+    })();
     return true;
   }
 

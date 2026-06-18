@@ -251,6 +251,36 @@ body {
   color: var(--text);
 }
 
+.file-load-row {
+  position: relative;
+  margin-top: 10px;
+}
+
+.file-load-label {
+  display: block;
+  text-align: center;
+  cursor: pointer;
+  color: var(--text);
+  background: rgba(79, 140, 255, 0.12);
+}
+
+.popup-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  pointer-events: none;
+}
+
+.file-load-hint {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .status-console {
   min-height: 48px;
   margin-top: 14px;

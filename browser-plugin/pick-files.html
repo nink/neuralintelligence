@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NINK — Select session files</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1419;
+      --text: #e7ecf3;
+      --muted: #9aa7b8;
+      --accent: #4f8cff;
+      --border: rgba(255, 255, 255, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .shell {
+      width: min(420px, 100%);
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.1rem;
+    }
+
+    p {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    .pick-btn {
+      display: inline-block;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(79, 140, 255, 0.18);
+      color: var(--text);
+      padding: 12px 20px;
+      font-size: 0.95rem;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    .pick-btn:hover {
+      background: rgba(79, 140, 255, 0.3);
+    }
+
+    #status {
+      margin-top: 16px;
+      min-height: 1.4em;
+      color: var(--muted);
+      font-size: 0.86rem;
+      white-space: pre-wrap;
+    }
+
+    #error {
+      margin-top: 12px;
+      color: #fca5a5;
+      font-size: 0.86rem;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <h1>Select NINK session files</h1>
+    <p>Select your <strong>.nink</strong> and matching <strong>.ninkkey</strong>, then click <strong>Open</strong> once. This window closes automatically.</p>
+    <label class="pick-btn" for="file-input">Choose .nink + .ninkkey</label>
+    <input id="file-input" type="file" multiple style="position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;">
+    <div id="status"></div>
+    <div id="error"></div>
+  </div>
+
+  <script src="src/utils/viewerDebug.page.js"></script>
+  <script>
+    const statusEl = document.getElementById("status");
+    const errorEl = document.getElementById("error");
+    const fileInput = document.getElementById("file-input");
+
+    function setStatus(text) {
+      statusEl.textContent = text || "";
+    }
+
+    function setError(text) {
+      errorEl.textContent = text || "";
+    }
+
+    function isNinkName(name) {
+      return /\.nink$/i.test(String(name || ""));
+    }
+
+    function isNinkKeyName(name) {
+      return /\.ninkkey$/i.test(String(name || ""));
+    }
+
+    function debug(event, detail) {
+      const fn = globalThis.__NINK_appendViewerDebugLog__;
+      if (typeof fn === "function") {
+        fn(event, detail).catch(() => {});
+      }
+    }
+
+    async function stashAndClose(ninkFile, keyFile) {
+      const ninkText = await ninkFile.text();
+      const keyText = await keyFile.text();
+      const payload = {
+        ninkText,
+        keyText,
+        ninkFilename: ninkFile.name,
+        keyFilename: keyFile.name,
+        at: Date.now(),
+      };
+
+      await new Promise((resolve, reject) => {
+        chrome.storage.local.set({ viewerFilePickResult: payload }, () => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          resolve();
+        });
+      });
+
+      debug("FILE_PICKER_STASH_OK", {
+        nink: ninkFile.name,
+        key: keyFile.name,
+        ninkBytes: ninkText.length,
+        keyBytes: keyText.length,
+      });
+
+      setStatus("Files loaded — returning to viewer…");
+      setTimeout(() => window.close(), 350);
+    }
+
+    fileInput.addEventListener("change", async () => {
+      setError("");
+      const list = Array.from(fileInput.files || []);
+      debug("PICK_FILES_CHANGE", { count: list.length, names: list.map((f) => f.name) });
+
+      if (!list.length) {
+        setStatus("No files selected.");
+        return;
+      }
+
+      const ninkFile = list.find((file) => isNinkName(file.name));
+      const keyFile = list.find((file) => isNinkKeyName(file.name));
+
+      if (!ninkFile) {
+        setError("Select a .nink file (and matching .ninkkey if you have it).");
+        fileInput.value = "";
+        return;
+      }
+
+      if (!keyFile) {
+        setError(`Selected ${ninkFile.name} but no .ninkkey — pick both files together.`);
+        fileInput.value = "";
+        return;
+      }
+
+      setStatus(`Reading ${ninkFile.name} + ${keyFile.name}…`);
+
+      try {
+        await stashAndClose(ninkFile, keyFile);
+      } catch (error) {
+        debug("FILE_PICKER_STASH_ERROR", { message: error.message });
+        setError(error.message || "Could not pass files to viewer.");
+        fileInput.value = "";
+      }
+    });
+
+    debug("PICK_FILES_WINDOW_OPEN", { href: location.href });
+    setStatus("Click the button above to choose files.");
+  </script>
+</body>
+</html>

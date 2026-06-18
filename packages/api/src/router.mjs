@@ -35,6 +35,13 @@ import {
   verifyEvidencePackage,
   viewEvidencePackage,
 } from "./packagesStore.mjs";
+import {
+  getPackageAccessStatus,
+  requestPackageAccess,
+  respondToPackageAccessRequest,
+} from "./packageAccessStore.mjs";
+import { AccessRequestError } from "./packageErrors.mjs";
+import { renderAccessRequestResultPage } from "./accessRequestPage.mjs";
 
 function useSupabaseStore() {
   return String(process.env.NINK_STORE || "json").toLowerCase() === "supabase";
@@ -290,13 +297,33 @@ export async function handleApiRequest(req, res) {
     sendJson(res, 200, {
       status: "ok",
       service: "nink-api",
-      docs: "GET /health · GET /signup · POST /v1/auth/signup/send-code · POST /v1/auth/signup/complete · POST /v1/auth/login · GET /v1/accounting/parameters · POST /v1/blockchain/anchor",
+      docs: "GET /health · GET /signup · GET /access-request/respond · POST /v1/packages/request-access · GET /v1/packages/access-status · POST /v1/auth/signup/send-code · POST /v1/auth/signup/complete · POST /v1/auth/login · GET /v1/accounting/parameters · POST /v1/blockchain/anchor",
     });
     return;
   }
 
   if (method === "GET" && pathname === "/signup") {
     sendHtml(res, 200, renderSignupPage());
+    return;
+  }
+
+  if (method === "GET" && pathname === "/access-request/respond") {
+    if (!useSupabaseStore()) {
+      sendHtml(
+        res,
+        501,
+        renderAccessRequestResultPage({ message: "Access requests require NINK_STORE=supabase." })
+      );
+      return;
+    }
+
+    try {
+      const token = resolveSearchParams(req).get("token");
+      const result = await respondToPackageAccessRequest(token);
+      sendHtml(res, 200, renderAccessRequestResultPage(result));
+    } catch (error) {
+      sendHtml(res, 400, renderAccessRequestResultPage({ message: error.message }));
+    }
     return;
   }
 
@@ -445,6 +472,68 @@ export async function handleApiRequest(req, res) {
 
       sendJson(res, 200, { status: "SUCCESS", ...result });
     } catch (error) {
+      sendJson(res, 400, { status: "ERROR", message: error.message });
+    }
+    return;
+  }
+
+  if (method === "GET" && pathname === "/v1/packages/access-status") {
+    if (!useSupabaseStore()) {
+      sendJson(res, 501, { status: "ERROR", message: "Packages require NINK_STORE=supabase." });
+      return;
+    }
+
+    try {
+      const user = await resolveUser(adapter, req);
+      if (!user) {
+        sendJson(res, 401, { status: "ERROR", message: "Sign in required." });
+        return;
+      }
+
+      const packageId =
+        resolveSearchParams(req).get("packageId") ||
+        resolveSearchParams(req).get("package_id");
+      const result = await getPackageAccessStatus(user, packageId);
+      sendJson(res, 200, { status: "SUCCESS", ...result });
+    } catch (error) {
+      if (error instanceof PackageAccessError) {
+        sendJson(res, 403, { status: "ERROR", message: error.message });
+        return;
+      }
+      sendJson(res, 400, { status: "ERROR", message: error.message });
+    }
+    return;
+  }
+
+  if (method === "POST" && pathname === "/v1/packages/request-access") {
+    if (!useSupabaseStore()) {
+      sendJson(res, 501, { status: "ERROR", message: "Packages require NINK_STORE=supabase." });
+      return;
+    }
+
+    try {
+      const user = await resolveUser(adapter, req);
+      if (!user) {
+        sendJson(res, 401, { status: "ERROR", message: "Sign in required." });
+        return;
+      }
+
+      const body = await readJsonBody(req);
+      const result = await requestPackageAccess(
+        user,
+        body.packageId || body.package_id,
+        body.message
+      );
+      sendJson(res, 200, { status: "SUCCESS", ...result });
+    } catch (error) {
+      if (error instanceof AccessRequestError) {
+        sendJson(res, 409, { status: "ERROR", message: error.message });
+        return;
+      }
+      if (error instanceof PackageAccessError) {
+        sendJson(res, 403, { status: "ERROR", message: error.message });
+        return;
+      }
       sendJson(res, 400, { status: "ERROR", message: error.message });
     }
     return;

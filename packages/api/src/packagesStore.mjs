@@ -10,43 +10,10 @@ import {
   PACKAGE_VIEW_FEE_WEI,
 } from "./constants.mjs";
 import { weiToCredits } from "./credits.mjs";
+import { InsufficientBalanceError, PackageAccessError } from "./packageErrors.mjs";
+import { loadAccessiblePackage } from "./packageAccessStore.mjs";
 
-export class PackageAccessError extends Error {
-  constructor(message = "Access denied.") {
-    super(message);
-    this.name = "PackageAccessError";
-  }
-}
-
-export class InsufficientBalanceError extends Error {
-  constructor(message = "Insufficient credits.") {
-    super(message);
-    this.name = "InsufficientBalanceError";
-  }
-}
-
-async function loadOwnedPackage(userId, packageId) {
-  const supabase = requireSupabase();
-  const row = await supabase
-    .from("evidence_packages")
-    .select("id, owner_id, title, encrypted_payload, payload_hash, encryption_version, state_hash")
-    .eq("id", packageId)
-    .maybeSingle();
-
-  if (row.error) {
-    throw new Error(row.error.message);
-  }
-
-  if (!row.data) {
-    throw new PackageAccessError("Package not found.");
-  }
-
-  if (row.data.owner_id !== userId) {
-    throw new PackageAccessError("You do not have access to this package.");
-  }
-
-  return row.data;
-}
+export { InsufficientBalanceError, PackageAccessError } from "./packageErrors.mjs";
 
 async function debitCredits(userId, amountWei, entryType, metadata = {}) {
   const supabase = requireSupabase();
@@ -117,9 +84,9 @@ export async function createEvidencePackage(user, { title, payload, stateHash })
 }
 
 export async function viewEvidencePackage(user, packageId) {
-  const pkg = await loadOwnedPackage(user.id, packageId);
+  const pkg = await loadAccessiblePackage(user.id, packageId);
   const feeWei = PACKAGE_VIEW_FEE_WEI;
-  const metadata = { package_id: packageId, action: "view" };
+  const metadata = { package_id: packageId, action: "view", access_role: pkg.accessRole };
 
   let debited = false;
   try {
@@ -146,6 +113,7 @@ export async function viewEvidencePackage(user, packageId) {
       balance: debit.balance,
       creditsCharged: weiToCredits(feeWei),
       creditsRemaining: Number(debit.credits),
+      accessRole: pkg.accessRole,
     };
   } catch (error) {
     if (debited && !/integrity check failed/i.test(error.message)) {
@@ -159,9 +127,9 @@ export async function viewEvidencePackage(user, packageId) {
 }
 
 export async function verifyEvidencePackage(user, packageId) {
-  const pkg = await loadOwnedPackage(user.id, packageId);
+  const pkg = await loadAccessiblePackage(user.id, packageId);
   const feeWei = PACKAGE_VERIFY_FEE_WEI;
-  const metadata = { package_id: packageId, action: "verify" };
+  const metadata = { package_id: packageId, action: "verify", access_role: pkg.accessRole };
 
   let debited = false;
   try {
@@ -186,6 +154,7 @@ export async function verifyEvidencePackage(user, packageId) {
       verifiedAt: new Date().toISOString(),
       balance: valid ? debit.balance : undefined,
       creditsCharged: valid ? weiToCredits(feeWei) : 0,
+      accessRole: pkg.accessRole,
     };
   } catch (error) {
     if (debited) {
@@ -199,9 +168,9 @@ export async function verifyEvidencePackage(user, packageId) {
 }
 
 export async function downloadEvidenceReport(user, packageId) {
-  const pkg = await loadOwnedPackage(user.id, packageId);
+  const pkg = await loadAccessiblePackage(user.id, packageId);
   const feeWei = PACKAGE_REPORT_FEE_WEI;
-  const metadata = { package_id: packageId, action: "report" };
+  const metadata = { package_id: packageId, action: "report", access_role: pkg.accessRole };
 
   let debited = false;
   try {
@@ -235,6 +204,7 @@ export async function downloadEvidenceReport(user, packageId) {
       balance: debit.balance,
       creditsCharged: weiToCredits(feeWei),
       creditsRemaining: Number(debit.credits),
+      accessRole: pkg.accessRole,
     };
   } catch (error) {
     if (debited && !/integrity check failed/i.test(error.message)) {

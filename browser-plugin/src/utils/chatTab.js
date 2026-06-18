@@ -80,19 +80,41 @@ async function readScraperState(tabId, expectedBuild) {
   return result || { ready: false, hasScrape: false, build: null };
 }
 
-async function injectScraperOnce(tabId, expectedBuild) {
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    func: (build) => {
-      globalThis.__NINK_SCRAPER_BUILD__ = build;
-    },
-    args: [expectedBuild],
-  });
+const scraperInjectionByTab = new Map();
 
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    files: CONTENT_SCRIPT_PATHS,
-  });
+async function injectScraperOnce(tabId, expectedBuild) {
+  const key = String(tabId);
+  if (scraperInjectionByTab.has(key)) {
+    return scraperInjectionByTab.get(key);
+  }
+
+  const injection = (async () => {
+    const existing = await readScraperState(tabId, expectedBuild);
+    if (existing.ready || existing.hasScrape) {
+      return;
+    }
+
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (build) => {
+        globalThis.__NINK_SCRAPER_BUILD__ = build;
+      },
+      args: [expectedBuild],
+    });
+
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: CONTENT_SCRIPT_PATHS,
+    });
+  })();
+
+  scraperInjectionByTab.set(key, injection);
+
+  try {
+    await injection;
+  } finally {
+    scraperInjectionByTab.delete(key);
+  }
 }
 
 export async function ensureScraperReadyOnTab(tabId, expectedBuild = chrome.runtime.getManifest().version) {

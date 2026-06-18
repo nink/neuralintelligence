@@ -23,7 +23,11 @@ import {
   fetchCloudAccountingParameters,
   writeAccountingToStorage,
 } from "../utils/accountingApi.js";
-import { openSessionViewerWindow } from "../utils/openViewer.js";
+import { requestOpenSessionViewer, stashViewerPendingFiles, formatViewerDebugLog, readViewerDebugLog, appendViewerDebugLog } from "../utils/openViewer.js";
+import {
+  isStrictCloudModeEnabled,
+  parseNinkPackageId,
+} from "../utils/strictCloudMode.js";
 
 let popupAccountingRefresh = null;
 
@@ -143,6 +147,7 @@ function getConfigFlags(ninkConfig = {}) {
     useDevStubs: ninkConfig.useDevStubs ?? DEFAULT_NINK_CONFIG.useDevStubs,
     useWalletMode: ninkConfig.useWalletMode ?? DEFAULT_NINK_CONFIG.useWalletMode,
     useLocalApi: ninkConfig.useLocalApi ?? DEFAULT_NINK_CONFIG.useLocalApi,
+    strictCloudMode: ninkConfig.strictCloudMode ?? DEFAULT_NINK_CONFIG.strictCloudMode,
   };
 }
 
@@ -383,17 +388,23 @@ async function updateUI() {
     const stored = await readLocalStorage(["accounting", "ninkConfig", "ninkSession"]);
     const accounting = stored.accounting;
     const config = { ...DEFAULT_NINK_CONFIG, ...stored.ninkConfig };
-    const { useDevStubs, useWalletMode, useLocalApi } = getConfigFlags(stored.ninkConfig || {});
+    const { useDevStubs, useWalletMode, useLocalApi, strictCloudMode } = getConfigFlags(stored.ninkConfig || {});
 
     document.getElementById("dev-stub-toggle").checked = useDevStubs;
     document.getElementById("wallet-mode-toggle").checked = useWalletMode;
     document.getElementById("local-api-toggle").checked = useLocalApi;
+    document.getElementById("strict-cloud-toggle").checked = strictCloudMode;
 
     const apiEndpointLabel = document.getElementById("api-endpoint-label");
     if (apiEndpointLabel) {
       apiEndpointLabel.textContent = useLocalApi
         ? `API: ${NINK_API_CONFIG.localDevBaseUrl}`
         : `API: ${NINK_API_CONFIG.productionBaseUrl}`;
+    }
+
+    const extensionIdLabel = document.getElementById("extension-id-label");
+    if (extensionIdLabel) {
+      extensionIdLabel.textContent = chrome.runtime.id || "—";
     }
 
     document.getElementById("account-panel").hidden = useDevStubs || useWalletMode;
@@ -705,10 +716,118 @@ document.getElementById("local-api-toggle").addEventListener("change", async (ev
   }
 });
 
+document.getElementById("strict-cloud-toggle").addEventListener("change", async (event) => {
+  const strictCloudMode = event.target.checked;
+  const statusConsole = document.getElementById("status-console");
+
+  try {
+    const stored = await readLocalStorage(["ninkConfig"]);
+    const current = stored.ninkConfig || {};
+    await chrome.storage.local.set({
+      ninkConfig: {
+        ...DEFAULT_NINK_CONFIG,
+        ...current,
+        strictCloudMode,
+      },
+    });
+    statusConsole.innerText = strictCloudMode
+      ? "Strict cloud mode ON — cloud-backed packages require paid unlock in the viewer."
+      : "Strict cloud mode OFF (dev/test) — local .ninkkey decrypt allowed for cloud packages.";
+  } catch (error) {
+    statusConsole.innerText = `Error: ${error.message}`;
+  } finally {
+    updateUI();
+  }
+});
+
+document.getElementById("popup-session-files")?.addEventListener("change", async (event) => {
+  const statusConsole = document.getElementById("status-console");
+  const files = Array.from(event.target?.files || []);
+  event.target.value = "";
+
+  if (!files.length) {
+    statusConsole.innerText = "No files selected.";
+    return;
+  }
+
+  const ninkFile = files.find((file) => /\.nink$/i.test(file.name));
+  const keyFile = files.find((file) => /\.ninkkey$/i.test(file.name));
+
+  if (!ninkFile) {
+    statusConsole.innerText =
+      `Select a .nink file (and .ninkkey for local-only packages). You picked: ${files.map((f) => f.name).join(", ")}`;
+    return;
+  }
+
+  try {
+    statusConsole.innerText = `Reading ${ninkFile.name}…`;
+    const ninkText = await ninkFile.text();
+    const stored = await readLocalStorage(["ninkConfig"]);
+    const config = { ...DEFAULT_NINK_CONFIG, ...stored.ninkConfig };
+    const packageId = parseNinkPackageId(ninkText);
+    const strictCloud = isStrictCloudModeEnabled(config);
+
+    if (strictCloud && packageId) {
+      await stashViewerPendingFiles({
+        ninkText,
+        ninkFilename: ninkFile.name,
+      });
+      statusConsole.innerText = "Opening viewer — cloud unlock required (10 credits to view)…";
+      await requestOpenSessionViewer();
+      statusConsole.innerText = `Viewer opened with cloud-backed ${ninkFile.name}. Use Cloud unlock in the viewer.`;
+      return;
+    }
+
+    if (!keyFile) {
+      statusConsole.innerText = "Local-only package: select both .nink and .ninkkey together.";
+      return;
+    }
+
+    const keyText = await keyFile.text();
+    await stashViewerPendingFiles({
+      ninkText,
+      keyText,
+      ninkFilename: ninkFile.name,
+      keyFilename: keyFile.name,
+    });
+    statusConsole.innerText = "Opening viewer with your session…";
+    await requestOpenSessionViewer();
+    statusConsole.innerText = `Viewer opened with ${ninkFile.name}. Check step log in viewer tab.`;
+  } catch (error) {
+    statusConsole.innerText = `Load failed: ${error.message}`;
+  }
+});
+
 document.getElementById("open-viewer-btn").addEventListener("click", () => {
-  openSessionViewerWindow().catch((error) => {
-    console.error("Could not open viewer window:", error);
-  });
+  const statusConsole = document.getElementById("status-console");
+  statusConsole.innerText = "Opening Session Viewer…";
+
+  appendViewerDebugLog("POPUP_OPEN_VIEWER_CLICK", {
+    extensionId: chrome.runtime.id,
+    viewerUrl: chrome.runtime.getURL("viewer.html"),
+  }).catch(() => {});
+
+  requestOpenSessionViewer()
+    .then((result) => {
+      statusConsole.innerText =
+        `Session Viewer tab opened.\nURL must start with chrome-extension:// — NOT file:///Downloads/\n${result?.url || chrome.runtime.getURL("viewer.html")}`;
+    })
+    .catch((error) => {
+      statusConsole.innerText = `Could not open viewer: ${error.message}`;
+      console.error("Could not open viewer window:", error);
+    });
+});
+
+document.getElementById("copy-viewer-debug-btn")?.addEventListener("click", async () => {
+  const statusConsole = document.getElementById("status-console");
+  try {
+    const log = await readViewerDebugLog();
+    const text = formatViewerDebugLog(log);
+    await navigator.clipboard.writeText(text || "(empty viewer debug log)");
+    statusConsole.innerText = `Copied ${log.length} debug log line(s) to clipboard. Paste into chat for troubleshooting.`;
+  } catch (error) {
+    statusConsole.innerText = `Could not copy debug log: ${error.message}`;
+  }
 });
 
 let signOffInProgress = false;
@@ -720,7 +839,7 @@ function applySignOffOutcome(outcome) {
   if (outcome?.status === "success") {
     consoleLog.innerText =
       outcome.message ||
-      "Files downloaded. Open Session Viewer below to view and verify your session.";
+      "Files downloaded. Session Viewer should open automatically. If Chrome also opens raw file:// tabs from Downloads, close those — they are not the NINK viewer.";
   } else if (outcome?.status === "error") {
     consoleLog.innerText = `Error: ${outcome.message || "Sign-off failed."}`;
   }

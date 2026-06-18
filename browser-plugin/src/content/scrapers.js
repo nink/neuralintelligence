@@ -1,6 +1,11 @@
-if (typeof globalThis.__NINK_SCRAPER_BUILD__ !== "string") {
-  globalThis.__NINK_SCRAPER_BUILD__ = "legacy-unset";
-}
+(() => {
+  if (typeof globalThis.__NINK_scrapeChatSession__ === "function") {
+    return;
+  }
+
+  if (typeof globalThis.__NINK_SCRAPER_BUILD__ !== "string") {
+    globalThis.__NINK_SCRAPER_BUILD__ = "legacy-unset";
+  }
 
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -3920,3 +3925,4 @@ async function scrapeChatSession() {
 }
 
 globalThis.__NINK_scrapeChatSession__ = scrapeChatSession;
+})();

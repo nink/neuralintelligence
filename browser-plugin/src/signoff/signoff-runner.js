@@ -3,7 +3,7 @@ import {
   executeSignOff,
   triggerNinkSignOffDownloads,
 } from "./runSignOffPipeline.js";
-import { openSessionViewerWindow } from "../utils/openViewer.js";
+import { openSessionViewerWindow, stashViewerPendingFiles } from "../utils/openViewer.js";
 
 function readSignOffParams() {
   return new Promise((resolve, reject) => {
@@ -78,6 +78,19 @@ async function main() {
       result.completedPackage,
       result.aesKeyBase64
     );
+
+    await stashViewerPendingFiles({
+      ninkText: JSON.stringify(result.completedPackage, null, 2),
+      keyText: result.aesKeyBase64,
+      ninkFilename,
+      keyFilename,
+    });
+
+    try {
+      await openSessionViewerWindow();
+    } catch (viewerError) {
+      console.error("Could not auto-open viewer:", viewerError);
+    }
 
     await chrome.storage.local.set({
       signOffOutcome: {

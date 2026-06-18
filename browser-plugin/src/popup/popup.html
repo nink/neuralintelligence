@@ -73,7 +73,14 @@
     </section>
 
     <button id="sign-off-btn" type="button">Sign Off — Credits</button>
-    <button id="open-viewer-btn" type="button" class="secondary-btn">Open Viewer · — Credits</button>
+
+    <div class="file-load-row">
+      <label for="popup-session-files" class="secondary-btn file-load-label">Load session &amp; view</label>
+      <input id="popup-session-files" type="file" class="popup-file-input" multiple>
+    </div>
+    <p class="file-load-hint">Local-only: select .nink + .ninkkey. Cloud-backed: .nink only (paid unlock in viewer).</p>
+
+    <button id="open-viewer-btn" type="button" class="secondary-btn">Open empty viewer</button>
 
     <details id="advanced-section" class="advanced-section">
       <summary>Advanced options</summary>
@@ -89,7 +96,13 @@
         <input id="local-api-toggle" type="checkbox">
         <span>Use local dev API (127.0.0.1:8787) instead of ni.nink.com</span>
       </label>
+      <label class="dev-toggle">
+        <input id="strict-cloud-toggle" type="checkbox" checked>
+        <span>Strict cloud mode — cloud packages require paid unlock (production default)</span>
+      </label>
       <p id="api-endpoint-label" class="onchain-note"></p>
+      <p class="onchain-note">Extension ID: <code id="extension-id-label">—</code></p>
+      <button id="copy-viewer-debug-btn" type="button" class="secondary-btn">Copy viewer debug log</button>
     </details>
 
     <div id="status-console" class="status-console" role="status"></div>
