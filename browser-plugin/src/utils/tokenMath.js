@@ -45,6 +45,27 @@ export function formatSignOffButtonLabel(feeWei) {
   return credits > 0 ? `Sign Off ${credits} Credits` : "Sign Off";
 }
 
+export function resolveViewerOpenCredits(accounting) {
+  if (!accounting) {
+    return null;
+  }
+  if (accounting.packageFees?.view?.credits != null) {
+    return accounting.packageFees.view.credits;
+  }
+  if (accounting.feeCredits != null) {
+    return accounting.feeCredits;
+  }
+  if (accounting.requiredFee) {
+    return weiToCredits(accounting.requiredFee);
+  }
+  return null;
+}
+
+export function formatViewerButtonLabel(accounting) {
+  const credits = resolveViewerOpenCredits(accounting);
+  return credits != null ? `Open Viewer · ${credits} Credits` : "Open Session Viewer";
+}
+
 export function compareTokenAmounts(left, right) {
   const leftUnits = parseTokenAmount(left);
   const rightUnits = parseTokenAmount(right);

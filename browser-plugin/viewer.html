@@ -60,6 +60,18 @@
       background: rgba(255, 255, 255, 0.02);
       text-align: center;
       transition: border-color 0.15s ease, background 0.15s ease;
+      position: relative;
+      display: block;
+      cursor: pointer;
+    }
+
+    .dropzone-input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
     }
 
     .dropzone.dragover {
@@ -461,11 +473,11 @@
       <p>Drop a signed <code>.nink</code> and matching <code>.ninkkey</code> to decrypt locally. Cloud packages can also be unlocked with credits when signed in.</p>
     </header>
 
-    <div id="dropzone" class="dropzone">
+    <label id="dropzone" class="dropzone" for="file-input">
       <strong>Drop session files here</strong>
-      <span>Click to attach, or drag both <code>.nink</code> and <code>.ninkkey</code> together</span>
-      <input id="file-input" type="file" accept=".nink,.ninkkey" multiple hidden>
-    </div>
+      <span>Click to choose files, or drag both <code>.nink</code> and <code>.ninkkey</code> together</span>
+      <input id="file-input" class="dropzone-input" type="file" accept=".nink,.ninkkey" multiple>
+    </label>
 
     <div id="error-banner" class="error-banner hidden" role="alert"></div>
 
@@ -559,6 +571,7 @@
     const cloudPackageTitle = document.getElementById("cloud-package-title");
     const PRODUCTION_API = "https://ni.nink.com";
     const CREDIT_WEI = 10n ** 16n;
+    const FALLBACK_PACKAGE_FEES = { view: 10, verify: 5, report: 5 };
     let packageViewCredits = null;
     let packageVerifyCredits = null;
     let packageReportCredits = null;
@@ -567,13 +580,37 @@
       return Number(BigInt(String(wei || 0)) / CREDIT_WEI);
     }
 
+    function applyPackageFeeFallbacks(accounting) {
+      if (packageViewCredits == null && accounting?.packageFees?.view?.credits != null) {
+        packageViewCredits = accounting.packageFees.view.credits;
+      }
+      if (packageVerifyCredits == null && accounting?.packageFees?.verify?.credits != null) {
+        packageVerifyCredits = accounting.packageFees.verify.credits;
+      }
+      if (packageReportCredits == null && accounting?.packageFees?.report?.credits != null) {
+        packageReportCredits = accounting.packageFees.report.credits;
+      }
+      if (packageViewCredits == null && accounting?.feeCredits != null) {
+        packageViewCredits = accounting.feeCredits;
+      }
+      if (packageViewCredits == null && accounting?.requiredFee) {
+        packageViewCredits = weiToCredits(accounting.requiredFee);
+      }
+      if (packageViewCredits == null) {
+        packageViewCredits = FALLBACK_PACKAGE_FEES.view;
+      }
+      if (packageVerifyCredits == null) {
+        packageVerifyCredits = FALLBACK_PACKAGE_FEES.verify;
+      }
+      if (packageReportCredits == null) {
+        packageReportCredits = FALLBACK_PACKAGE_FEES.report;
+      }
+    }
+
     function updateCloudButtonLabels() {
-      const viewCredits = packageViewCredits ?? "—";
-      const verifyCredits = packageVerifyCredits ?? "—";
-      const reportCredits = packageReportCredits ?? "—";
-      cloudOpenBtn.textContent = `Open package · ${viewCredits} credits`;
-      cloudVerifyBtn.textContent = `Verify integrity · ${verifyCredits} credits`;
-      cloudReportBtn.textContent = `Download report · ${reportCredits} credits`;
+      cloudOpenBtn.textContent = `Open package · ${packageViewCredits} credits`;
+      cloudVerifyBtn.textContent = `Verify integrity · ${packageVerifyCredits} credits`;
+      cloudReportBtn.textContent = `Download report · ${packageReportCredits} credits`;
     }
 
     async function loadPackageFees() {
@@ -587,12 +624,14 @@
           packageViewCredits = fees.view.credits;
           packageVerifyCredits = fees.verify?.credits ?? null;
           packageReportCredits = fees.report?.credits ?? null;
+          applyPackageFeeFallbacks(stored.accounting);
           updateCloudButtonLabels();
           return;
         }
       }
 
       if (!session?.sessionToken) {
+        applyPackageFeeFallbacks(stored.accounting);
         updateCloudButtonLabels();
         return;
       }
@@ -631,6 +670,7 @@
         // Keep placeholders until API is reachable.
       }
 
+      applyPackageFeeFallbacks(stored.accounting);
       updateCloudButtonLabels();
     }
 
@@ -645,7 +685,7 @@
     }
 
     function resolveApiBase(config) {
-      if (config?.useLocalApi !== false) {
+      if (config?.useLocalApi === true) {
         return "http://127.0.0.1:8787";
       }
       return PRODUCTION_API;
@@ -1000,10 +1040,13 @@
       await attemptAutoLoadKey(loadedNinkFileName, keyFile);
     }
 
-    async function openArchivePicker() {
-      clearError();
+    function handleIncomingFileSelection(event) {
+      const files = event.target?.files;
+      if (!files?.length) {
+        return;
+      }
+      processIncomingFiles(files);
       fileInput.value = "";
-      fileInput.click();
     }
 
     function showError(message) {
@@ -1927,10 +1970,9 @@
       clearError();
     }
 
-    dropzone.addEventListener("click", () => openArchivePicker());
-
     dropzone.addEventListener("dragover", (event) => {
       event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
       dropzone.classList.add("dragover");
     });
 
@@ -1947,14 +1989,7 @@
       processIncomingFiles(event.dataTransfer.files);
     });
 
-    fileInput.addEventListener("change", (event) => {
-      const files = event.target.files;
-      if (!files?.length) {
-        return;
-      }
-      processIncomingFiles(files);
-      fileInput.value = "";
-    });
+    fileInput.addEventListener("change", handleIncomingFileSelection);
 
     decryptButton.addEventListener("click", handleDecrypt);
     cloudOpenBtn.addEventListener("click", handleCloudOpen);

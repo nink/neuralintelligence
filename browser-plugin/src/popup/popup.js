@@ -1,4 +1,4 @@
-import { hasSufficientBalance, formatCreditsForDisplay, formatSignOffButtonLabel } from "../utils/tokenMath.js";
+import { hasSufficientBalance, formatCreditsForDisplay, formatSignOffButtonLabel, formatViewerButtonLabel } from "../utils/tokenMath.js";
 import { LOCAL_DEV_ACCOUNTING } from "../utils/devStubs.js";
 import { isSupportedChatUrl } from "../config/chatPlatforms.js";
 import { resolveChatTabForSignOff, ensureScraperReadyOnTab } from "../utils/chatTab.js";
@@ -32,6 +32,14 @@ function updateSignOffButtonLabel(feeWei) {
     return;
   }
   button.textContent = formatSignOffButtonLabel(feeWei);
+}
+
+function updateViewerButtonLabel(accounting) {
+  const button = document.getElementById("open-viewer-btn");
+  if (!button) {
+    return;
+  }
+  button.textContent = formatViewerButtonLabel(accounting);
 }
 
 async function ensureAccountingFresh(config, session) {
@@ -176,6 +184,7 @@ async function refreshAccountPanel() {
     loggedIn.hidden = true;
     signOffButton.disabled = true;
     updateSignOffButtonLabel(null);
+    updateViewerButtonLabel(null);
     const lastEmail = await readLastLoginEmail();
     const emailInput = document.getElementById("login-email-input");
     if (emailInput && lastEmail) {
@@ -219,6 +228,7 @@ async function refreshAccountPanel() {
   balanceEl.textContent = formatCreditsForDisplay(accounting.userBalance);
   feeEl.textContent = formatCreditsForDisplay(accounting.requiredFee);
   updateSignOffButtonLabel(accounting.requiredFee);
+  updateViewerButtonLabel(accounting);
   sourceLabel.textContent = isCloudAccounting(accounting)
     ? `Balance from your NINK account (${apiBase}).`
     : accountingError || "Could not verify balance — try signing out and in again.";
@@ -398,6 +408,7 @@ async function updateUI() {
           accounting.requiredFee
         );
         updateSignOffButtonLabel(accounting.requiredFee);
+        updateViewerButtonLabel(accounting);
       }
 
       document.getElementById("sign-off-btn").disabled = accounting
@@ -410,6 +421,10 @@ async function updateUI() {
     }
 
     setLocalDevModeIndicator(useDevStubs, useWalletMode);
+
+    if (accounting) {
+      updateViewerButtonLabel(accounting);
+    }
 
     if (signOffInProgress) {
       document.getElementById("sign-off-btn").disabled = true;
