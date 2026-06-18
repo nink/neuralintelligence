@@ -1,4 +1,43 @@
+function extensionInstallConfig() {
+  const publicBase = process.env.NINK_PUBLIC_BASE_URL || "https://ni.nink.com";
+  const githubRepo =
+    process.env.NINK_EXTENSION_GITHUB_REPO || "https://github.com/nink/neuralintelligence";
+  const chromeWebStore = String(process.env.NINK_CHROME_WEB_STORE_URL || "").trim();
+  const zipUrl =
+    process.env.NINK_EXTENSION_ZIP_URL ||
+    `${githubRepo.replace(/\/$/, "")}/archive/refs/heads/main.zip`;
+
+  return { publicBase, githubRepo, chromeWebStore, zipUrl };
+}
+
+const CHROME_LOGO_SVG = `<svg class="chrome-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+  <circle cx="24" cy="24" r="22" fill="#fff"/>
+  <path fill="#DB4437" d="M24 8c6.2 0 11.7 3 15.1 7.6L30.5 24 24 8z"/>
+  <path fill="#0F9D58" d="M8.9 30.4A16 16 0 0 1 8 24c0-2.1.4-4.1 1.1-6L24 24 8.9 30.4z"/>
+  <path fill="#FFCD40" d="M24 40a16 16 0 0 1-14.1-8.4L24 24l-14.1 8.4A15.9 15.9 0 0 0 24 40z"/>
+  <path fill="#4285F4" d="M40 24c0 5.5-2.2 10.5-5.8 14.1L24 24h16z"/>
+  <circle cx="24" cy="24" r="9" fill="#fff"/>
+  <circle cx="24" cy="24" r="7" fill="#4285F4"/>
+</svg>`;
+
 export function renderSignupPage() {
+  const { publicBase, githubRepo, chromeWebStore, zipUrl } = extensionInstallConfig();
+  const storeLink = chromeWebStore
+    ? `<a class="install-btn install-btn-primary" href="${chromeWebStore}" target="_blank" rel="noopener noreferrer">
+        ${CHROME_LOGO_SVG}
+        <span>Install from Chrome Web Store</span>
+      </a>`
+    : "";
+
+  const developerInstall = chromeWebStore
+    ? ""
+    : `<ol class="install-steps">
+        <li>Download the extension: <a href="${zipUrl}" target="_blank" rel="noopener noreferrer">neuralintelligence.zip</a> from GitHub</li>
+        <li>Unzip and open the <code>browser-plugin</code> folder</li>
+        <li>In Chrome, open <a href="chrome://extensions/">chrome://extensions</a> → turn on <strong>Developer mode</strong></li>
+        <li>Click <strong>Load unpacked</strong> → select the <code>browser-plugin</code> folder</li>
+      </ol>`;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -18,8 +57,16 @@ export function renderSignupPage() {
       place-items: center;
       padding: 24px;
     }
+    .layout {
+      width: min(100%, 920px);
+      display: grid;
+      gap: 20px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 860px) {
+      .layout { grid-template-columns: 1fr 1fr; align-items: start; }
+    }
     .card {
-      width: min(100%, 440px);
       background: #fff;
       border: 1px solid #e5e7eb;
       border-radius: 16px;
@@ -27,7 +74,7 @@ export function renderSignupPage() {
       box-shadow: 0 18px 40px rgba(17, 24, 39, 0.08);
     }
     .brand { font-size: 28px; font-weight: 900; color: #ff4f9a; margin: 0 0 8px; }
-    .subtitle { margin: 0 0 24px; color: #4b5563; line-height: 1.5; }
+    .subtitle { margin: 0 0 20px; color: #4b5563; line-height: 1.5; font-size: 15px; }
     label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
     input {
       width: 100%;
@@ -67,50 +114,168 @@ export function renderSignupPage() {
     .step2.show { display: block; }
     ul.rules { margin: 8px 0 0; padding-left: 18px; color: #6b7280; font-size: 12px; }
     ul.rules li.ok { color: #047857; }
-    .footer { margin-top: 20px; font-size: 12px; color: #6b7280; text-align: center; }
-    .footer a { color: #ff4f9a; }
+    .footer { margin-top: 20px; font-size: 12px; color: #6b7280; text-align: center; line-height: 1.5; }
+    .footer a { color: #ff4f9a; font-weight: 600; }
+
+    .install-card h2 {
+      margin: 0 0 6px;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .install-card p { margin: 0 0 14px; color: #4b5563; font-size: 14px; line-height: 1.5; }
+    .chrome-logo { width: 28px; height: 28px; flex-shrink: 0; }
+    .install-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+      margin-bottom: 12px;
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      color: #111827;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .install-btn:hover { background: #f3f4f6; border-color: #d1d5db; }
+    .install-btn-primary {
+      background: linear-gradient(180deg, #fff 0%, #f9fafb 100%);
+      border-color: #c7d2fe;
+      box-shadow: 0 4px 14px rgba(66, 133, 244, 0.12);
+    }
+    .install-btn .chrome-logo { width: 32px; height: 32px; }
+    .install-steps {
+      margin: 0;
+      padding-left: 20px;
+      color: #374151;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .install-steps li { margin-bottom: 8px; }
+    .install-steps a { color: #2563eb; font-weight: 600; }
+    .install-steps code {
+      font-size: 12px;
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .demo-flow {
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .demo-flow h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #6b7280;
+    }
+    .demo-flow ol {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #374151;
+    }
+    .demo-flow li { margin-bottom: 6px; }
+    .next-steps {
+      display: none;
+      margin-top: 14px;
+      padding: 14px;
+      border-radius: 10px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      font-size: 13px;
+      line-height: 1.55;
+      color: #166534;
+    }
+    .next-steps.show { display: block; }
+    .next-steps strong { display: block; margin-bottom: 6px; font-size: 14px; }
+    .next-steps ol { margin: 8px 0 0; padding-left: 18px; }
   </style>
 </head>
 <body>
-  <main class="card">
-    <h1 class="brand">NINK</h1>
-    <p class="subtitle">Create your account to get <strong>500 credits</strong> (5.00 NINK) and sign off AI sessions with the browser extension.</p>
+  <div class="layout">
+    <main class="card">
+      <h1 class="brand">NINK</h1>
+      <p class="subtitle">Create your account to get <strong>500 credits</strong> (5.00 NINK). Sign off AI sessions, save encrypted evidence packages, and share access with other NINK users.</p>
 
-    <form id="signup-form" novalidate>
-      <label for="email">Email</label>
-      <input id="email" name="email" type="email" autocomplete="username" required placeholder="you@example.com">
+      <form id="signup-form" novalidate>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="username" required placeholder="you@example.com">
 
-      <button type="button" class="primary" id="send-code-btn">Send verification code</button>
+        <button type="button" class="primary" id="send-code-btn">Send verification code</button>
 
-      <div class="step2" id="step2">
-        <label for="code">Verification code</label>
-        <input id="code" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="6-digit code">
+        <div class="step2" id="step2">
+          <label for="code">Verification code</label>
+          <input id="code" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="6-digit code">
 
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Create a password">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Create a password">
 
-        <label for="confirm">Confirm password</label>
-        <input id="confirm" name="confirm" type="password" autocomplete="new-password" placeholder="Repeat password">
+          <label for="confirm">Confirm password</label>
+          <input id="confirm" name="confirm" type="password" autocomplete="new-password" placeholder="Repeat password">
 
-        <ul class="rules" id="rules">
-          <li id="rule-length">At least 8 characters</li>
-          <li id="rule-lower">One lowercase letter</li>
-          <li id="rule-upper">One uppercase letter</li>
-          <li id="rule-number">One number</li>
-          <li id="rule-symbol">One symbol (! @ # $ …)</li>
-          <li id="rule-match">Passwords match</li>
-        </ul>
+          <ul class="rules" id="rules">
+            <li id="rule-length">At least 8 characters</li>
+            <li id="rule-lower">One lowercase letter</li>
+            <li id="rule-upper">One uppercase letter</li>
+            <li id="rule-number">One number</li>
+            <li id="rule-symbol">One symbol (! @ # $ …)</li>
+            <li id="rule-match">Passwords match</li>
+          </ul>
 
-        <button type="submit" class="primary" id="create-btn">Create account</button>
+          <button type="submit" class="primary" id="create-btn">Create account</button>
+        </div>
+      </form>
+
+      <div class="status" id="status" role="status"></div>
+      <div class="next-steps" id="next-steps">
+        <strong>Account ready — next steps for your demo</strong>
+        <ol>
+          <li>Install the Chrome extension (panel on the right →)</li>
+          <li>Click the NINK icon → sign in with this email and password</li>
+          <li>Open ChatGPT → <strong>Sign Off</strong> → save your <code>.nink</code> file</li>
+          <li>Share the <code>.nink</code> with a second user to test access requests</li>
+        </ol>
       </div>
-    </form>
+      <p class="footer">Already have an account? Sign in via the extension popup after installing.</p>
+    </main>
 
-    <div class="status" id="status" role="status"></div>
-    <p class="footer">Already have an account? Sign in with the <a href="https://ni.nink.com">NINK browser extension</a>.</p>
-  </main>
+    <aside class="card install-card" aria-labelledby="install-heading">
+      <h2 id="install-heading">
+        ${CHROME_LOGO_SVG}
+        Install Chrome extension
+      </h2>
+      <p>Required to sign off AI chats, view evidence packages, and request access from owners.</p>
+      ${storeLink}
+      <a class="install-btn${chromeWebStore ? "" : " install-btn-primary"}" href="chrome://extensions/" id="chrome-extensions-link">
+        ${CHROME_LOGO_SVG}
+        <span>Open chrome://extensions</span>
+      </a>
+      ${developerInstall}
+      <div class="demo-flow">
+        <h3>Full demo flow (two laptops)</h3>
+        <ol>
+          <li><strong>Alice</strong> — create account here → install extension → sign in → sign off ChatGPT session</li>
+          <li><strong>Bob</strong> — create account → install extension → sign in → load Alice’s <code>.nink</code></li>
+          <li>Bob clicks <strong>Ask owner</strong> → Alice approves by email → Bob pays 10 credits to view</li>
+        </ol>
+        <p class="hint" style="margin-top:10px">Extension source: <a href="${githubRepo}" target="_blank" rel="noopener noreferrer">GitHub</a> · API: <a href="${publicBase}">${publicBase}</a></p>
+      </div>
+    </aside>
+  </div>
 
   <script>
     const statusEl = document.getElementById("status");
+    const nextStepsEl = document.getElementById("next-steps");
     const step2 = document.getElementById("step2");
     const emailEl = document.getElementById("email");
     const codeEl = document.getElementById("code");
@@ -118,6 +283,14 @@ export function renderSignupPage() {
     const confirmEl = document.getElementById("confirm");
     const sendCodeBtn = document.getElementById("send-code-btn");
     const createBtn = document.getElementById("create-btn");
+    const chromeExtensionsLink = document.getElementById("chrome-extensions-link");
+
+    if (chromeExtensionsLink) {
+      chromeExtensionsLink.addEventListener("click", (event) => {
+        event.preventDefault();
+        window.location.href = "chrome://extensions/";
+      });
+    }
 
     function showStatus(kind, message) {
       statusEl.className = "status show " + kind;
@@ -205,6 +378,7 @@ export function renderSignupPage() {
 
       createBtn.disabled = true;
       showStatus("info", "Creating your account…");
+      nextStepsEl.classList.remove("show");
 
       try {
         const response = await fetch("/v1/auth/signup/complete", {
@@ -218,8 +392,9 @@ export function renderSignupPage() {
         }
         showStatus(
           "success",
-          "Account created with 500 credits. Open the NINK browser extension and sign in with your email and password."
+          "Account created with 500 credits. Install the Chrome extension (right panel), then sign in from the extension popup."
         );
+        nextStepsEl.classList.add("show");
         document.getElementById("signup-form").reset();
         step2.classList.remove("show");
         refreshRules();

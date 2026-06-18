@@ -93,7 +93,7 @@ NINK_PACKAGE_MASTER_KEY=<32-byte key, base64 or hex>
 
 Display: **1 NINK = 100 credits** (0.01 NINK per credit). Sign-off costs **10 credits** (0.10 NINK). Signup bonus **500 credits** (5.00 NINK).
 
-Signup page: **https://ni.nink.com/signup** (email verification via Resend, then password creation).
+Signup page: **https://ni.nink.com/signup** (email verification via Resend, Chrome extension install panel, then password creation).
 
 ---
 
