@@ -158,16 +158,34 @@
     updateCloudButtonLabels();
   }
 
+    function hideAskOwnerControls() {
+      if (cloudAskOwnerBtn) {
+        cloudAskOwnerBtn.hidden = true;
+        cloudAskOwnerBtn.classList.add("hidden");
+      }
+      if (cloudAccessMessage) {
+        cloudAccessMessage.hidden = true;
+        cloudAccessMessage.classList.add("hidden");
+      }
+      if (cloudAccessMessageWrap) {
+        cloudAccessMessageWrap.hidden = true;
+        cloudAccessMessageWrap.classList.add("hidden");
+      }
+    }
+
     function showAskOwnerControls(labelText) {
       if (cloudAskOwnerBtn) {
         cloudAskOwnerBtn.hidden = false;
+        cloudAskOwnerBtn.classList.remove("hidden");
         cloudAskOwnerBtn.textContent = labelText || "Ask owner for access";
       }
       if (cloudAccessMessage) {
         cloudAccessMessage.hidden = false;
+        cloudAccessMessage.classList.remove("hidden");
       }
       if (cloudAccessMessageWrap) {
         cloudAccessMessageWrap.hidden = false;
+        cloudAccessMessageWrap.classList.remove("hidden");
       }
     }
 
@@ -193,17 +211,7 @@
         : "Cloud unlock (optional — costs credits)";
     }
 
-    if (cloudAskOwnerBtn) {
-      cloudAskOwnerBtn.hidden = true;
-      cloudAskOwnerBtn.disabled = false;
-      cloudAskOwnerBtn.textContent = "Ask owner for access";
-    }
-    if (cloudAccessMessage) {
-      cloudAccessMessage.hidden = true;
-    }
-    if (cloudAccessMessageWrap) {
-      cloudAccessMessageWrap.hidden = true;
-    }
+    hideAskOwnerControls();
 
     if (!strictMode && viewer().getLoadedSecretKey?.()) {
       cloudBalanceLabel.textContent =
@@ -252,6 +260,13 @@
       cloudStatus.textContent = access.ownerEmail
         ? `Request pending · owner: ${access.ownerEmail}`
         : "Request pending.";
+      return;
+    }
+
+    if (access?.accessStatus === "unknown") {
+      cloudBalanceLabel.textContent =
+        `${creditLine} · ${access.message || "Could not verify access."} You can still ask the owner.`;
+      showAskOwnerControls("Ask owner for access");
       return;
     }
 

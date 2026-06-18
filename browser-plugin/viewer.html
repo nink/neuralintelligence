@@ -513,7 +513,7 @@
   <div class="page">
     <header>
       <h1>NINK Session Viewer</h1>
-      <p><strong>Build 1.14.1</strong> — Use the extension viewer (not file:// tabs). Cloud packages need owner approval + credits.</p>
+      <p><strong>Build 1.14.2</strong> — Use the extension viewer (not file:// tabs). Cloud packages need owner approval + credits.</p>
       <p>Sign in via the extension popup, load a <code>.nink</code> file, then use <strong>Ask owner</strong> if you are not the owner.</p>
       <p id="page-url" style="font-size:0.8rem;color:var(--muted);word-break:break-all;"></p>
     </header>
@@ -570,8 +570,10 @@
         <span>Optional message to owner</span>
         <textarea id="cloud-access-message" class="cloud-access-message hidden" rows="2" placeholder="Why do you need access?"></textarea>
       </label>
+      <div class="cloud-actions cloud-actions-ask">
+        <button id="cloud-ask-owner-btn" type="button" class="cloud-btn hidden">Ask owner for access</button>
+      </div>
       <div class="cloud-actions">
-        <button id="cloud-ask-owner-btn" type="button" class="cloud-btn secondary hidden">Ask owner for access</button>
         <button id="cloud-open-btn" type="button" class="cloud-btn">Open package · — credits</button>
         <button id="cloud-verify-btn" type="button" class="cloud-btn secondary">Verify integrity · — credits</button>
         <button id="cloud-report-btn" type="button" class="cloud-btn secondary">Download report · — credits</button>
