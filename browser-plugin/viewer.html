@@ -61,6 +61,8 @@
       text-align: center;
       transition: border-color 0.15s ease, background 0.15s ease;
       cursor: pointer;
+      display: block;
+      position: relative;
     }
 
     .dropzone.dragover {
@@ -82,6 +84,8 @@
     }
 
     .choose-files-btn {
+      display: inline-block;
+      margin-top: 4px;
       border: 1px solid var(--border);
       border-radius: 999px;
       background: rgba(79, 140, 255, 0.16);
@@ -92,10 +96,6 @@
       cursor: pointer;
     }
 
-    .choose-files-btn:hover {
-      background: rgba(79, 140, 255, 0.28);
-    }
-
     .dropzone-status {
       margin-top: 12px;
       color: var(--muted);
@@ -103,8 +103,28 @@
       min-height: 1.2em;
     }
 
-    .file-input-hidden {
-      display: none !important;
+    /* Do NOT use display:none on file inputs — Chrome extensions won't fire change. */
+    .sr-only-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .wrong-tab-banner {
+      margin-top: 16px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(234, 179, 8, 0.5);
+      background: rgba(234, 179, 8, 0.14);
+      color: #fde68a;
+      font-size: 0.9rem;
+      line-height: 1.45;
     }
 
     .panel {
@@ -488,15 +508,20 @@
     <header>
       <h1>NINK Session Viewer</h1>
       <p>Drop a signed <code>.nink</code> and matching <code>.ninkkey</code> to decrypt locally. Cloud packages can also be unlocked with credits when signed in.</p>
+      <p id="extension-url-hint" class="cloud-note" hidden>Open this page from the NINK extension (URL starts with <code>chrome-extension://</code>). Do not double-click <code>.ninkkey</code> files in Downloads.</p>
     </header>
 
-    <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Upload NINK session files">
-      <strong>Drop session files here</strong>
-      <span>Drag both <code>.nink</code> and <code>.ninkkey</code> together, or choose them below</span>
-      <button id="choose-files-btn" type="button" class="choose-files-btn">Choose .nink + .ninkkey files</button>
-      <p id="dropzone-status" class="dropzone-status"></p>
-      <input id="file-input" class="file-input-hidden" type="file" accept=".nink,.ninkkey" multiple>
+    <div id="wrong-tab-banner" class="wrong-tab-banner hidden" role="alert">
+      You opened a <code>.ninkkey</code> file directly in Chrome (file://). Close this tab, click the NINK extension icon, then choose <strong>Open Viewer</strong>.
     </div>
+
+    <label id="dropzone" class="dropzone">
+      <input id="file-input" class="sr-only-input" type="file" accept=".nink,.ninkkey" multiple>
+      <strong>Drop session files here</strong>
+      <span>Click anywhere in this box to choose files, or drag both <code>.nink</code> and <code>.ninkkey</code> together</span>
+      <span class="choose-files-btn">Choose .nink + .ninkkey files</span>
+      <p id="dropzone-status" class="dropzone-status"></p>
+    </label>
 
     <div id="error-banner" class="error-banner hidden" role="alert"></div>
 
@@ -575,8 +600,9 @@
 
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("file-input");
-    const chooseFilesBtn = document.getElementById("choose-files-btn");
     const dropzoneStatus = document.getElementById("dropzone-status");
+    const wrongTabBanner = document.getElementById("wrong-tab-banner");
+    const extensionUrlHint = document.getElementById("extension-url-hint");
     const keyStatus = document.getElementById("key-status");
     const decryptButton = document.getElementById("decrypt-btn");
     const errorBanner = document.getElementById("error-banner");
@@ -1037,11 +1063,20 @@
       dropzoneStatus.textContent = message || "";
     }
 
-    function openFilePicker() {
-      clearError();
-      fileInput.value = "";
-      fileInput.click();
+    function warnIfWrongViewerTab() {
+      const protocol = String(location.protocol || "").toLowerCase();
+      if (protocol === "chrome-extension:") {
+        extensionUrlHint.hidden = false;
+        return;
+      }
+
+      wrongTabBanner.classList.remove("hidden");
+      showError(
+        "This is not the NINK extension viewer. Close this tab and open the viewer from the NINK extension popup."
+      );
     }
+
+    warnIfWrongViewerTab();
 
     async function processIncomingFiles(files) {
       const list = Array.from(files || []);
@@ -2016,26 +2051,6 @@
       clearError();
     }
 
-    dropzone.addEventListener("click", (event) => {
-      if (event.target.closest("#choose-files-btn")) {
-        return;
-      }
-      openFilePicker();
-    });
-
-    chooseFilesBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openFilePicker();
-    });
-
-    dropzone.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        openFilePicker();
-      }
-    });
-
     dropzone.addEventListener("dragover", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -2043,10 +2058,8 @@
       dropzone.classList.add("dragover");
     });
 
-    dropzone.addEventListener("dragleave", (event) => {
-      if (event.currentTarget === event.target) {
-        dropzone.classList.remove("dragover");
-      }
+    dropzone.addEventListener("dragleave", () => {
+      dropzone.classList.remove("dragover");
     });
 
     dropzone.addEventListener("drop", (event) => {
@@ -2057,7 +2070,10 @@
         showError("Drop did not include any files.");
         return;
       }
-      processIncomingFiles(event.dataTransfer.files);
+      processIncomingFiles(event.dataTransfer.files).catch((error) => {
+        showError(error.message || "Could not load dropped files.");
+        setDropzoneStatus("");
+      });
     });
 
     fileInput.addEventListener("change", (event) => {

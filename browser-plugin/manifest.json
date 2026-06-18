@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NINK Work-Product Authenticator",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "description": "Secures AI session work-products via localized encryption and L2 blockchain anchoring.",
   "permissions": [
     "activeTab",

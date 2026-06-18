@@ -23,6 +23,7 @@ import {
   fetchCloudAccountingParameters,
   writeAccountingToStorage,
 } from "../utils/accountingApi.js";
+import { openSessionViewerWindow } from "../utils/openViewer.js";
 
 let popupAccountingRefresh = null;
 
@@ -705,7 +706,9 @@ document.getElementById("local-api-toggle").addEventListener("change", async (ev
 });
 
 document.getElementById("open-viewer-btn").addEventListener("click", () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL("viewer.html") });
+  openSessionViewerWindow().catch((error) => {
+    console.error("Could not open viewer window:", error);
+  });
 });
 
 let signOffInProgress = false;

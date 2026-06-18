@@ -3,6 +3,7 @@ import {
   executeSignOff,
   triggerNinkSignOffDownloads,
 } from "./runSignOffPipeline.js";
+import { openSessionViewerWindow } from "../utils/openViewer.js";
 
 function readSignOffParams() {
   return new Promise((resolve, reject) => {
@@ -23,7 +24,9 @@ function setRunnerStatus(text, tone = "info") {
 }
 
 function openSessionViewer() {
-  chrome.tabs.create({ url: chrome.runtime.getURL("viewer.html") });
+  openSessionViewerWindow().catch((error) => {
+    console.error("Could not open viewer window:", error);
+  });
 }
 
 document.getElementById("open-viewer-btn").addEventListener("click", openSessionViewer);
