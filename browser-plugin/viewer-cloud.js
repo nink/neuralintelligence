@@ -158,7 +158,20 @@
     updateCloudButtonLabels();
   }
 
-  async function refreshCloudAccessPanel() {
+    function showAskOwnerControls(labelText) {
+      if (cloudAskOwnerBtn) {
+        cloudAskOwnerBtn.hidden = false;
+        cloudAskOwnerBtn.textContent = labelText || "Ask owner for access";
+      }
+      if (cloudAccessMessage) {
+        cloudAccessMessage.hidden = false;
+      }
+      if (cloudAccessMessageWrap) {
+        cloudAccessMessageWrap.hidden = false;
+      }
+    }
+
+    async function refreshCloudAccessPanel() {
     const loadedSession = viewer().getLoadedSession?.();
     const cloudPanelHeading = document.getElementById("cloud-panel-heading");
 
@@ -205,9 +218,10 @@
 
     if (!session?.sessionToken) {
       cloudBalanceLabel.textContent = strictMode
-        ? "Sign in via the extension popup, then ask the owner or unlock once approved."
+        ? "Sign in via the extension popup (top-right NINK icon), then click Ask owner below."
         : "Sign in via the extension popup, or load your local .ninkkey (dev mode only).";
       setCloudActionButtonsEnabled(false);
+      showAskOwnerControls("Ask owner for access (sign in first)");
       return;
     }
 
@@ -244,36 +258,27 @@
     if (access?.accessStatus === "denied") {
       cloudBalanceLabel.textContent =
         "Owner denied access. Local .ninkkey still cannot unlock cloud-backed packages.";
-      if (cloudAskOwnerBtn) {
-        cloudAskOwnerBtn.hidden = false;
-        cloudAskOwnerBtn.textContent = "Ask owner again";
-      }
-      if (cloudAccessMessage) {
-        cloudAccessMessage.hidden = false;
-      }
-      if (cloudAccessMessageWrap) {
-        cloudAccessMessageWrap.hidden = false;
-      }
+      showAskOwnerControls("Ask owner again");
       return;
     }
 
     cloudBalanceLabel.textContent =
       `${creditLine} · You need owner approval before cloud unlock (even if you have the .ninkkey file).`;
-    if (cloudAskOwnerBtn) {
-      cloudAskOwnerBtn.hidden = false;
-    }
-    if (cloudAccessMessage) {
-      cloudAccessMessage.hidden = false;
-    }
-    if (cloudAccessMessageWrap) {
-      cloudAccessMessageWrap.hidden = false;
-    }
+    showAskOwnerControls("Ask owner for access");
   }
 
   async function handleAskOwner() {
     const loadedSession = viewer().getLoadedSession?.();
     viewer().clearError?.();
     cloudStatus.textContent = "Sending access request…";
+
+    const stored = await readExtensionStorage(["ninkSession"]);
+    if (!stored.ninkSession?.sessionToken) {
+      const message = "Sign in with the NINK extension popup first, then click Ask owner again.";
+      cloudStatus.textContent = message;
+      viewer().showError?.(message);
+      return;
+    }
 
     try {
       const message = cloudAccessMessage?.value || "";

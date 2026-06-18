@@ -839,7 +839,7 @@ function applySignOffOutcome(outcome) {
   if (outcome?.status === "success") {
     consoleLog.innerText =
       outcome.message ||
-      "Files downloaded. Session Viewer should open automatically. If Chrome also opens raw file:// tabs from Downloads, close those — they are not the NINK viewer.";
+      "Files downloaded. Open the extension popup and use Load session & view when you want to inspect the session.";
   } else if (outcome?.status === "error") {
     consoleLog.innerText = `Error: ${outcome.message || "Sign-off failed."}`;
   }

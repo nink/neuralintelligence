@@ -3,7 +3,6 @@ import {
   executeSignOff,
   triggerNinkSignOffDownloads,
 } from "./runSignOffPipeline.js";
-import { openSessionViewerWindow, stashViewerPendingFiles } from "../utils/openViewer.js";
 
 function readSignOffParams() {
   return new Promise((resolve, reject) => {
@@ -22,14 +21,6 @@ function setRunnerStatus(text, tone = "info") {
   statusEl.textContent = text;
   statusEl.className = tone === "success" ? "success" : tone === "error" ? "error" : "";
 }
-
-function openSessionViewer() {
-  openSessionViewerWindow().catch((error) => {
-    console.error("Could not open viewer window:", error);
-  });
-}
-
-document.getElementById("open-viewer-btn").addEventListener("click", openSessionViewer);
 
 async function main() {
   const params = await readSignOffParams();
@@ -79,24 +70,10 @@ async function main() {
       result.aesKeyBase64
     );
 
-    await stashViewerPendingFiles({
-      ninkText: JSON.stringify(result.completedPackage, null, 2),
-      keyText: result.aesKeyBase64,
-      ninkFilename,
-      keyFilename,
-    });
-
-    try {
-      await openSessionViewerWindow();
-    } catch (viewerError) {
-      console.error("Could not auto-open viewer:", viewerError);
-    }
-
     await chrome.storage.local.set({
       signOffOutcome: {
         status: "success",
-        message:
-          "Files downloaded. Open Session Viewer below to view and verify your session.",
+        message: `${buildSignOffSuccessMessage(result, ninkFilename, keyFilename)} Open the extension popup later if you want to view the session.`,
         at: new Date().toISOString(),
         ninkFilename,
         keyFilename,
@@ -104,10 +81,9 @@ async function main() {
     });
     await chrome.storage.local.remove("signOffParams");
     setRunnerStatus(
-      `${buildSignOffSuccessMessage(result, ninkFilename, keyFilename)} Drop both files in Session Viewer to verify. Closing in a few seconds…`,
+      `${buildSignOffSuccessMessage(result, ninkFilename, keyFilename)} Files saved. Closing in a few seconds…`,
       "success"
     );
-    document.getElementById("open-viewer-btn").hidden = false;
 
     setTimeout(() => {
       window.close();

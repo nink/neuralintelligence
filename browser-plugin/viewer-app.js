@@ -369,6 +369,8 @@ document.addEventListener('drop', function (e) { e.preventDefault(); }, true);
       document.getElementById("meta-network").textContent = session.blockchainNetwork || "—";
       document.getElementById("meta-tx").textContent = session.transactionHash || "—";
       document.getElementById("meta-state").textContent = session.stateHash || "—";
+      document.getElementById("meta-package-id").textContent =
+        session.packageId || "None (local-only file)";
       metadataPanel.classList.remove("hidden");
       decryptPanel.classList.remove("hidden");
       chatPanel.classList.add("hidden");

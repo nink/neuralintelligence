@@ -55,6 +55,20 @@ async function loadUserEmail(userId) {
   return row.data;
 }
 
+export async function logPackageAccessEvent(packageId, actorUserId, eventType, metadata = {}) {
+  try {
+    const supabase = requireSupabase();
+    await supabase.from("package_access_events").insert({
+      package_id: packageId,
+      actor_user_id: actorUserId || null,
+      event_type: eventType,
+      metadata,
+    });
+  } catch (error) {
+    console.warn("package_access_events insert failed:", error.message);
+  }
+}
+
 async function hasActiveGrant(userId, packageId) {
   const supabase = requireSupabase();
   const row = await supabase
@@ -85,6 +99,10 @@ export async function loadAccessiblePackage(userId, packageId) {
   if (await hasActiveGrant(userId, packageId)) {
     return { ...pkg, accessRole: "granted" };
   }
+
+  await logPackageAccessEvent(packageId, userId, "unlock_denied", {
+    reason: "no_owner_grant",
+  });
 
   throw new PackageAccessError(
     "You do not have access to this package. Ask the owner for access."
@@ -147,6 +165,9 @@ export async function getPackageAccessStatus(user, packageId) {
   }
 
   if (latest.data?.status === "denied") {
+    await logPackageAccessEvent(packageId, user.id, "access_blocked", {
+      access_status: "denied",
+    });
     return {
       packageId: pkg.id,
       title: pkg.title,
@@ -155,6 +176,10 @@ export async function getPackageAccessStatus(user, packageId) {
       requestPending: false,
     };
   }
+
+  await logPackageAccessEvent(packageId, user.id, "access_blocked", {
+    access_status: "none",
+  });
 
   return {
     packageId: pkg.id,
@@ -240,6 +265,12 @@ export async function requestPackageAccess(user, packageId, message = "") {
     message: safeMessage,
     approveUrl,
     denyUrl,
+  });
+
+  await logPackageAccessEvent(packageId, user.id, "access_requested", {
+    request_id: insert.data.id,
+    owner_email: owner.email,
+    message: safeMessage || null,
   });
 
   return {
