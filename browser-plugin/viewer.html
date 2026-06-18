@@ -85,7 +85,7 @@
 
     .choose-files-btn {
       display: inline-block;
-      margin-top: 4px;
+      margin-top: 8px;
       border: 1px solid var(--border);
       border-radius: 999px;
       background: rgba(79, 140, 255, 0.16);
@@ -94,6 +94,10 @@
       font-size: 0.92rem;
       font-weight: 650;
       cursor: pointer;
+    }
+
+    .choose-files-btn:hover {
+      background: rgba(79, 140, 255, 0.28);
     }
 
     .dropzone-status {
@@ -507,21 +511,21 @@
   <div class="page">
     <header>
       <h1>NINK Session Viewer</h1>
-      <p>Drop a signed <code>.nink</code> and matching <code>.ninkkey</code> to decrypt locally. Cloud packages can also be unlocked with credits when signed in.</p>
-      <p id="extension-url-hint" class="cloud-note" hidden>Open this page from the NINK extension (URL starts with <code>chrome-extension://</code>). Do not double-click <code>.ninkkey</code> files in Downloads.</p>
+      <p>Drop both files <strong>onto this NINK viewer popup</strong> (not onto the main Chrome window). Or use the button below.</p>
+      <p id="extension-url-hint" class="cloud-note" hidden>Viewer ready · URL starts with <code>chrome-extension://</code></p>
     </header>
 
     <div id="wrong-tab-banner" class="wrong-tab-banner hidden" role="alert">
-      You opened a <code>.ninkkey</code> file directly in Chrome (file://). Close this tab, click the NINK extension icon, then choose <strong>Open Viewer</strong>.
+      You opened a NINK file directly in Chrome (file://). Close this tab, click the NINK extension icon, then choose <strong>Open Viewer</strong>.
     </div>
 
-    <label id="dropzone" class="dropzone">
-      <input id="file-input" class="sr-only-input" type="file" accept=".nink,.ninkkey" multiple>
-      <strong>Drop session files here</strong>
-      <span>Click anywhere in this box to choose files, or drag both <code>.nink</code> and <code>.ninkkey</code> together</span>
-      <span class="choose-files-btn">Choose .nink + .ninkkey files</span>
+    <div id="dropzone" class="dropzone">
+      <strong>Drop .nink + .ninkkey here</strong>
+      <span>Release files inside this popup window only — dropping on the browser behind it opens raw JSON in a new tab.</span>
+      <button id="choose-files-btn" type="button" class="choose-files-btn">Choose .nink + .ninkkey files</button>
+      <input id="file-input" class="sr-only-input" type="file" multiple>
       <p id="dropzone-status" class="dropzone-status"></p>
-    </label>
+    </div>
 
     <div id="error-banner" class="error-banner hidden" role="alert"></div>
 
@@ -600,6 +604,7 @@
 
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("file-input");
+    const chooseFilesBtn = document.getElementById("choose-files-btn");
     const dropzoneStatus = document.getElementById("dropzone-status");
     const wrongTabBanner = document.getElementById("wrong-tab-banner");
     const extensionUrlHint = document.getElementById("extension-url-hint");

@@ -4,7 +4,7 @@ export function openSessionViewerWindow() {
     url: chrome.runtime.getURL("viewer.html"),
     type: "popup",
     width: 980,
-    height: 920,
+    height: 960,
     focused: true,
   });
 }
