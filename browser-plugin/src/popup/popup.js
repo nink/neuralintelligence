@@ -1,4 +1,4 @@
-import { hasSufficientBalance, formatCreditsForDisplay } from "../utils/tokenMath.js";
+import { hasSufficientBalance, formatCreditsForDisplay, formatSignOffButtonLabel } from "../utils/tokenMath.js";
 import { LOCAL_DEV_ACCOUNTING } from "../utils/devStubs.js";
 import { isSupportedChatUrl } from "../config/chatPlatforms.js";
 import { resolveChatTabForSignOff, ensureScraperReadyOnTab } from "../utils/chatTab.js";
@@ -25,6 +25,14 @@ import {
 } from "../utils/accountingApi.js";
 
 let popupAccountingRefresh = null;
+
+function updateSignOffButtonLabel(feeWei) {
+  const button = document.getElementById("sign-off-btn");
+  if (!button) {
+    return;
+  }
+  button.textContent = formatSignOffButtonLabel(feeWei);
+}
 
 async function ensureAccountingFresh(config, session) {
   if (config.useDevStubs || config.useWalletMode || !session?.sessionToken) {
@@ -167,6 +175,7 @@ async function refreshAccountPanel() {
     loggedOut.hidden = false;
     loggedIn.hidden = true;
     signOffButton.disabled = true;
+    updateSignOffButtonLabel(null);
     const lastEmail = await readLastLoginEmail();
     const emailInput = document.getElementById("login-email-input");
     if (emailInput && lastEmail) {
@@ -209,6 +218,7 @@ async function refreshAccountPanel() {
 
   balanceEl.textContent = formatCreditsForDisplay(accounting.userBalance);
   feeEl.textContent = formatCreditsForDisplay(accounting.requiredFee);
+  updateSignOffButtonLabel(accounting.requiredFee);
   sourceLabel.textContent = isCloudAccounting(accounting)
     ? `Balance from your NINK account (${apiBase}).`
     : accountingError || "Could not verify balance — try signing out and in again.";
@@ -330,6 +340,7 @@ async function refreshOnChainWalletPanel() {
 
     balanceEl.textContent = `${snapshot.balanceFormatted} NINK`;
     feeEl.textContent = snapshot.anchorFeeFormatted;
+    updateSignOffButtonLabel(snapshot.anchorFeeWei);
     walletLabel.textContent = `Connected ${shortAddress(snapshot.walletAddress)} · balance read from token contract (not MetaMask UI).`;
     healthLabel.textContent = `Chain ${snapshot.health.chainId} OK · token ${shortAddress(snapshot.tokenAddress)}`;
     healthLabel.className = "onchain-note chain-health-ok";
@@ -386,6 +397,7 @@ async function updateUI() {
         document.getElementById("fee-display").innerText = formatCreditsForDisplay(
           accounting.requiredFee
         );
+        updateSignOffButtonLabel(accounting.requiredFee);
       }
 
       document.getElementById("sign-off-btn").disabled = accounting

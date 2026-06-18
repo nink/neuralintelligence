@@ -458,13 +458,13 @@
   <div class="page">
     <header>
       <h1>NINK Session Viewer</h1>
-      <p>Drop a signed <code>.nink</code> session. Cloud packages unlock with credits via your NINK account.</p>
+      <p>Drop a signed <code>.nink</code> and matching <code>.ninkkey</code> to decrypt locally. Cloud packages can also be unlocked with credits when signed in.</p>
     </header>
 
     <div id="dropzone" class="dropzone">
       <strong>Drop session files here</strong>
       <span>Click to attach, or drag both <code>.nink</code> and <code>.ninkkey</code> together</span>
-      <input id="file-input" type="file" accept=".nink,.ninkkey,application/octet-stream" multiple hidden>
+      <input id="file-input" type="file" accept=".nink,.ninkkey" multiple hidden>
     </div>
 
     <div id="error-banner" class="error-banner hidden" role="alert"></div>
@@ -502,13 +502,13 @@
     </section>
 
     <section id="cloud-access-panel" class="panel hidden">
-      <h2>Secure Cloud Package</h2>
-      <p id="cloud-package-title" class="cloud-note">This session is stored as an encrypted cloud package.</p>
-      <p id="cloud-balance-label" class="cloud-note">Sign in via the extension popup, then unlock below.</p>
+      <h2>Cloud unlock (optional)</h2>
+      <p id="cloud-package-title" class="cloud-note">This session is registered in the cloud.</p>
+      <p id="cloud-balance-label" class="cloud-note">Drop your matching <code>.ninkkey</code> above to decrypt free locally, or sign in and unlock below.</p>
       <div class="cloud-actions">
-        <button id="cloud-open-btn" type="button" class="cloud-btn">Open package · 10 credits</button>
-        <button id="cloud-verify-btn" type="button" class="cloud-btn secondary">Verify integrity · 5 credits</button>
-        <button id="cloud-report-btn" type="button" class="cloud-btn secondary">Download report · 5 credits</button>
+        <button id="cloud-open-btn" type="button" class="cloud-btn">Open package · — credits</button>
+        <button id="cloud-verify-btn" type="button" class="cloud-btn secondary">Verify integrity · — credits</button>
+        <button id="cloud-report-btn" type="button" class="cloud-btn secondary">Download report · — credits</button>
       </div>
       <p id="cloud-status" class="cloud-note" style="margin-top:12px"></p>
     </section>
@@ -559,9 +559,79 @@
     const cloudPackageTitle = document.getElementById("cloud-package-title");
     const PRODUCTION_API = "https://ni.nink.com";
     const CREDIT_WEI = 10n ** 16n;
+    let packageViewCredits = null;
+    let packageVerifyCredits = null;
+    let packageReportCredits = null;
 
     function weiToCredits(wei) {
       return Number(BigInt(String(wei || 0)) / CREDIT_WEI);
+    }
+
+    function updateCloudButtonLabels() {
+      const viewCredits = packageViewCredits ?? "—";
+      const verifyCredits = packageVerifyCredits ?? "—";
+      const reportCredits = packageReportCredits ?? "—";
+      cloudOpenBtn.textContent = `Open package · ${viewCredits} credits`;
+      cloudVerifyBtn.textContent = `Verify integrity · ${verifyCredits} credits`;
+      cloudReportBtn.textContent = `Download report · ${reportCredits} credits`;
+    }
+
+    async function loadPackageFees() {
+      const stored = await readExtensionStorage(["ninkSession", "ninkConfig", "accounting"]);
+      const session = stored.ninkSession;
+      const config = stored.ninkConfig || {};
+
+      if (stored.accounting?.requiredFee) {
+        const fees = stored.accounting.packageFees;
+        if (fees?.view?.credits != null) {
+          packageViewCredits = fees.view.credits;
+          packageVerifyCredits = fees.verify?.credits ?? null;
+          packageReportCredits = fees.report?.credits ?? null;
+          updateCloudButtonLabels();
+          return;
+        }
+      }
+
+      if (!session?.sessionToken) {
+        updateCloudButtonLabels();
+        return;
+      }
+
+      const apiBase = resolveApiBase(config);
+      try {
+        const response = await fetch(`${apiBase}/v1/accounting/parameters`, {
+          headers: { Authorization: `Bearer ${session.sessionToken}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data.packageFees?.view?.credits != null) {
+          packageViewCredits = data.packageFees.view.credits;
+          packageVerifyCredits = data.packageFees.verify?.credits ?? null;
+          packageReportCredits = data.packageFees.report?.credits ?? null;
+          await new Promise((resolve) => {
+            chrome.storage.local.set(
+              {
+                accounting: {
+                  ...(stored.accounting || {}),
+                  userBalance: String(data.balance ?? stored.accounting?.userBalance ?? "0"),
+                  requiredFee: String(data.feeRequirement ?? stored.accounting?.requiredFee ?? "0"),
+                  packageFees: data.packageFees,
+                  feeCredits: data.feeCredits,
+                  balanceCredits: data.balanceCredits,
+                  source: data.source || "nink-cloud-api",
+                  updatedAt: Date.now(),
+                },
+              },
+              resolve
+            );
+          });
+        } else if (response.ok && data.feeCredits != null) {
+          packageViewCredits = data.feeCredits;
+        }
+      } catch (_error) {
+        // Keep placeholders until API is reachable.
+      }
+
+      updateCloudButtonLabels();
     }
 
     function readExtensionStorage(keys) {
@@ -587,16 +657,27 @@
         return;
       }
 
+      await loadPackageFees();
       cloudAccessPanel.classList.remove("hidden");
-      decryptPanel.classList.add("hidden");
-      cloudPackageTitle.textContent = `Encrypted cloud package · ${loadedSession.packageId}`;
+      cloudPackageTitle.textContent = `Cloud package · ${loadedSession.packageId}`;
+
+      if (loadedSecretKey) {
+        cloudBalanceLabel.textContent =
+          "Local key loaded — conversation should appear above. Cloud unlock is optional for sharing.";
+        cloudOpenBtn.disabled = true;
+        cloudVerifyBtn.disabled = true;
+        cloudReportBtn.disabled = true;
+        return;
+      }
 
       const stored = await readExtensionStorage(["ninkSession", "accounting", "ninkConfig"]);
       const session = stored.ninkSession;
       const accounting = stored.accounting;
+      const openCost = packageViewCredits ?? "—";
 
       if (!session?.sessionToken) {
-        cloudBalanceLabel.textContent = "Sign in with the NINK extension popup, then reload this viewer.";
+        cloudBalanceLabel.textContent =
+          `Opening costs ${openCost} credits. Sign in with the NINK extension popup, or drop your .ninkkey file above to decrypt free locally.`;
         cloudOpenBtn.disabled = true;
         cloudVerifyBtn.disabled = true;
         cloudReportBtn.disabled = true;
@@ -606,8 +687,8 @@
       const credits = accounting?.userBalance ? weiToCredits(accounting.userBalance) : null;
       cloudBalanceLabel.textContent =
         credits != null
-          ? `Your balance: ${credits} credits`
-          : "Balance unavailable — open the extension popup to refresh.";
+          ? `Opening costs ${openCost} credits. Your balance: ${credits} credits · or drop your .ninkkey to decrypt free locally`
+          : `Opening costs ${openCost} credits. Open the extension popup to refresh balance, or drop your .ninkkey file.`;
       cloudOpenBtn.disabled = false;
       cloudVerifyBtn.disabled = false;
       cloudReportBtn.disabled = false;
@@ -763,9 +844,11 @@
         setKeyStatus(sourceLabel, true);
       }
 
-      if (autoDecrypt && loadedSecretKey && loadedSession?.encryptedPayload && !loadedSession?.packageId) {
+      if (autoDecrypt && loadedSecretKey && loadedSession?.encryptedPayload) {
         handleDecrypt();
       }
+
+      refreshCloudAccessPanel();
 
       return true;
     }
@@ -858,9 +941,15 @@
         pendingKey = null;
       }
 
-      setKeyStatus(
-        `Loaded ${ninkFileName}. Drop the matching ${getKeyFileName(ninkFileName)} on the upload area above.`
-      );
+      if (loadedSession?.packageId) {
+        setKeyStatus(
+          `Loaded ${ninkFileName}. Drop the matching ${getKeyFileName(ninkFileName)} to decrypt locally, or use cloud unlock below.`
+        );
+      } else {
+        setKeyStatus(
+          `Loaded ${ninkFileName}. Drop the matching ${getKeyFileName(ninkFileName)} on the upload area above.`
+        );
+      }
       return false;
     }
 
@@ -880,7 +969,7 @@
         return;
       }
 
-      setKeyStatus(`Loaded ${file.name}. Drop the matching .nink file above.`, true);
+      setKeyStatus(`Loaded ${file.name}. Drop the matching .nink file above to decrypt locally.`, true);
     }
 
     async function processIncomingFiles(files) {
@@ -912,34 +1001,8 @@
     }
 
     async function openArchivePicker() {
-      if (window.showOpenFilePicker) {
-        try {
-          const handles = await window.showOpenFilePicker({
-            multiple: true,
-            types: [
-              {
-                description: "NINK session files",
-                accept: {
-                  "application/octet-stream": [".nink", ".ninkkey"],
-                },
-              },
-            ],
-          });
-
-          const files = await Promise.all(
-            handles.map(async (handle) => handle.getFile())
-          );
-          await processIncomingFiles(files);
-          return;
-        } catch (error) {
-          if (error?.name === "AbortError") {
-            return;
-          }
-          showError(error.message || "Could not open session files.");
-          return;
-        }
-      }
-
+      clearError();
+      fileInput.value = "";
       fileInput.click();
     }
 
@@ -975,12 +1038,11 @@
       document.getElementById("meta-anchor-method").textContent =
         session.anchorMethod || (session.blockchainNetwork === "NINK-Cloud" ? "nink-cloud-relayer" : "—");
       metadataPanel.classList.remove("hidden");
+      decryptPanel.classList.remove("hidden");
       if (session.packageId) {
-        decryptPanel.classList.add("hidden");
         refreshCloudAccessPanel();
       } else {
         cloudAccessPanel.classList.add("hidden");
-        decryptPanel.classList.remove("hidden");
       }
       chatPanel.classList.add("hidden");
       document.getElementById("chat-log").innerHTML = "";
@@ -1898,6 +1960,7 @@
     cloudOpenBtn.addEventListener("click", handleCloudOpen);
     cloudVerifyBtn.addEventListener("click", handleCloudVerify);
     cloudReportBtn.addEventListener("click", handleCloudReport);
+    loadPackageFees();
   </script>
 </body>
 </html>

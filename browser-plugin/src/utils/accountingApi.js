@@ -52,6 +52,9 @@ export async function fetchCloudAccountingParameters(config = {}, session) {
   return {
     userBalance: String(data.balance),
     requiredFee: String(data.feeRequirement),
+    balanceCredits: data.balanceCredits,
+    feeCredits: data.feeCredits,
+    packageFees: data.packageFees,
     source: data.source || "nink-cloud-api",
     isLocalDevMode: false,
   };

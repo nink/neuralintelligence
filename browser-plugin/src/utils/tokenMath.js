@@ -40,6 +40,11 @@ export function formatCreditsForDisplay(wei) {
   return `${credits} credits`;
 }
 
+export function formatSignOffButtonLabel(feeWei) {
+  const credits = weiToCredits(feeWei);
+  return credits > 0 ? `Sign Off ${credits} Credits` : "Sign Off";
+}
+
 export function compareTokenAmounts(left, right) {
   const leftUnits = parseTokenAmount(left);
   const rightUnits = parseTokenAmount(right);
