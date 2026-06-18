@@ -21,6 +21,23 @@ Do **not** launch public Rail 1 or Rail 2 until the relevant gates pass. See [`P
 - [x] Audit record / timeline renders for captured sessions
 - [ ] Viewer displays Rail 1 `proofId` vs Rail 2 `transactionHash` distinctly (label polish)
 
+### Gate S4 — Chrome extension (consumer install) — **required for public launch**
+
+The current install path is **not end-user friendly** and must **not** be the public launch experience.
+
+**Today (demo / internal testers only):** [ni.nink.com/extension/install](https://ni.nink.com/extension/install) → copy install command → files land in `~/nink-extension` → `chrome://extensions` → **Developer mode** → **Load unpacked**. Unlike MetaMask (“Add to Chrome” from the store), this requires manual steps and shows Chrome’s unpacked-extension warning.
+
+**Public launch requires** one-click install from the **Chrome Web Store** (same model as MetaMask).
+
+- [ ] Acknowledge current flow is **demo-only** — acceptable for Peter, Bob, and early testers; **blocked for general users**
+- [ ] Chrome Web Store developer account registered ($5 one-time)
+- [ ] Privacy policy URL + store listing (description, screenshots, permissions justification for broad `host_permissions`)
+- [ ] `browser-plugin` submitted and **approved** in Chrome Web Store review
+- [ ] Production env: `NINK_CHROME_WEB_STORE_URL` set → signup and `/extension/install` show **Install from Chrome Web Store** as the primary button
+- [ ] Clean-machine test: new user installs with **one click**, no Developer mode, no install script
+- [ ] Store update path verified: version bump in `manifest.json` → publish → Chrome auto-updates without re-running install script
+- [ ] *(Optional, post-launch)* ni.nink.com `/extension/` folder remains for **internal QA / version pinning** — not marketed as the consumer install path
+
 ### Gate S3 — Encryption & key custody (future — enterprise)
 
 See [`REQUIREMENTS-ENCRYPTION-KEY-CUSTODY.md`](REQUIREMENTS-ENCRYPTION-KEY-CUSTODY.md). **Not required for Rail 1 v1 consumer launch.**
@@ -129,8 +146,9 @@ The following were achieved on **`pre-dual-rail-2026-06`** / **`archive/single-r
 
 1. ~~Shared product (Gates S1–S2 core)~~ — done on archive branch
 2. **Rail 1** — Gates R1-A through R1-E
-3. **Rail 2** — Gates R2-A through R2-E (reuse archived wallet/contract work)
-4. **Enterprise encryption** — Gates S3-A through S3-G (after Rail 1 stable)
+3. **Gate S4** — Chrome Web Store listing (**block public launch** until one-click install works; current developer install is not sufficient)
+4. **Rail 2** — Gates R2-A through R2-E (reuse archived wallet/contract work)
+5. **Enterprise encryption** — Gates S3-A through S3-G (after Rail 1 stable)
 
 ---
 
@@ -142,4 +160,4 @@ The following were achieved on **`pre-dual-rail-2026-06`** / **`archive/single-r
 | `packages/api` on port 8787 | Prototype for Rail 1 API shape; replace JSON with Postgres |
 | Legacy `dev-stub-server.mjs` on 8786 | Deprecated — do not use for Gate 4/Rail 1 |
 
-**Rule:** Ship Rail 1 when **virtual NINK purchase + debit sign-off + Viewer** pass Gates R1-* with counsel-approved closed-loop terms. Rail 2 is optional for power users and agents until KYC and velocity gates pass.
+**Rule:** Ship Rail 1 when **virtual NINK purchase + debit sign-off + Viewer** pass Gates R1-* with counsel-approved closed-loop terms **and Gate S4** (Chrome Web Store one-click install — not developer Load unpacked). Rail 2 is optional for power users and agents until KYC and velocity gates pass.
