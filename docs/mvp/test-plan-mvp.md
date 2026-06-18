@@ -9,7 +9,7 @@ Use this script to validate the full evidence-package + access-control + billing
 
 - [ ] Supabase migrations **001–007** applied (especially **005**, **006**, **007**)
 - [ ] API live at `https://ni.nink.com` with `NINK_STORE=supabase`, `RESEND_API_KEY`, `NINK_PACKAGE_MASTER_KEY`
-- [ ] **New laptop:** create accounts at [https://ni.nink.com/signup](https://ni.nink.com/signup) → install extension from signup page (download zip → Load unpacked `browser-plugin`)
+- [ ] **New laptop:** create account at [https://ni.nink.com/signup](https://ni.nink.com/signup) → [install extension](https://ni.nink.com/extension/install) (one command; files hosted at `/extension/`, no zip)
 - [ ] Extension loaded at **v1.14.2+** (`chrome://extensions` → Reload after updates)
 - [ ] Two Chrome profiles or sequential sign-in/sign-out (Alice then Bob)
 - [ ] ChatGPT tab open for Alice sign-off

@@ -1,5 +1,11 @@
 {
   "version": 2,
   "name": "nink-neural-intelligence-api",
+  "buildCommand": "node scripts/sync-extension-public.mjs",
+  "functions": {
+    "api/index.mjs": {
+      "includeFiles": "public/extension/**"
+    }
+  },
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }

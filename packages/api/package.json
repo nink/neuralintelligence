@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "node src/server.mjs",
     "start": "node src/server.mjs",
-    "vercel:deploy": "vercel --prod"
+    "sync-extension": "node scripts/sync-extension-public.mjs",
+    "vercel:deploy": "npm run sync-extension && vercel --prod"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",

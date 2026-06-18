@@ -1,13 +1,7 @@
 function extensionInstallConfig() {
   const publicBase = process.env.NINK_PUBLIC_BASE_URL || "https://ni.nink.com";
-  const githubRepo =
-    process.env.NINK_EXTENSION_GITHUB_REPO || "https://github.com/nink/neuralintelligence";
   const chromeWebStore = String(process.env.NINK_CHROME_WEB_STORE_URL || "").trim();
-  const zipUrl =
-    process.env.NINK_EXTENSION_ZIP_URL ||
-    `${githubRepo.replace(/\/$/, "")}/archive/refs/heads/main.zip`;
-
-  return { publicBase, githubRepo, chromeWebStore, zipUrl };
+  return { publicBase, chromeWebStore };
 }
 
 const CHROME_LOGO_SVG = `<svg class="chrome-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
@@ -21,22 +15,14 @@ const CHROME_LOGO_SVG = `<svg class="chrome-logo" viewBox="0 0 48 48" aria-hidde
 </svg>`;
 
 export function renderSignupPage() {
-  const { publicBase, githubRepo, chromeWebStore, zipUrl } = extensionInstallConfig();
+  const { publicBase, chromeWebStore } = extensionInstallConfig();
+  const installUrl = `${publicBase}/extension/install`;
   const storeLink = chromeWebStore
     ? `<a class="install-btn install-btn-primary" href="${chromeWebStore}" target="_blank" rel="noopener noreferrer">
         ${CHROME_LOGO_SVG}
         <span>Install from Chrome Web Store</span>
       </a>`
     : "";
-
-  const developerInstall = chromeWebStore
-    ? ""
-    : `<ol class="install-steps">
-        <li>Download the extension: <a href="${zipUrl}" target="_blank" rel="noopener noreferrer">neuralintelligence.zip</a> from GitHub</li>
-        <li>Unzip and open the <code>browser-plugin</code> folder</li>
-        <li>In Chrome, open <a href="chrome://extensions/">chrome://extensions</a> → turn on <strong>Developer mode</strong></li>
-        <li>Click <strong>Load unpacked</strong> → select the <code>browser-plugin</code> folder</li>
-      </ol>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -95,9 +81,7 @@ export function renderSignupPage() {
       cursor: pointer;
     }
     .primary { background: #ff4f9a; color: #fff; }
-    .secondary { background: #f3f4f6; color: #111827; margin-top: 10px; }
     button:disabled { opacity: 0.55; cursor: not-allowed; }
-    .hint { font-size: 12px; color: #6b7280; margin-top: 6px; line-height: 1.45; }
     .status {
       margin-top: 16px;
       padding: 12px 14px;
@@ -116,7 +100,6 @@ export function renderSignupPage() {
     ul.rules li.ok { color: #047857; }
     .footer { margin-top: 20px; font-size: 12px; color: #6b7280; text-align: center; line-height: 1.5; }
     .footer a { color: #ff4f9a; font-weight: 600; }
-
     .install-card h2 {
       margin: 0 0 6px;
       font-size: 1.1rem;
@@ -138,17 +121,12 @@ export function renderSignupPage() {
       font-weight: 700;
       text-decoration: none;
       margin-bottom: 12px;
-      border: 1px solid #e5e7eb;
-      background: #f9fafb;
-      color: #111827;
-      transition: background 0.15s ease, border-color 0.15s ease;
+      border: 1px solid #ff4f9a;
+      background: #ff4f9a;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(255, 79, 154, 0.25);
     }
-    .install-btn:hover { background: #f3f4f6; border-color: #d1d5db; }
-    .install-btn-primary {
-      background: linear-gradient(180deg, #fff 0%, #f9fafb 100%);
-      border-color: #c7d2fe;
-      box-shadow: 0 4px 14px rgba(66, 133, 244, 0.12);
-    }
+    .install-btn:hover { filter: brightness(0.98); }
     .install-btn .chrome-logo { width: 32px; height: 32px; }
     .install-steps {
       margin: 0;
@@ -165,26 +143,6 @@ export function renderSignupPage() {
       padding: 2px 6px;
       border-radius: 4px;
     }
-    .demo-flow {
-      margin-top: 18px;
-      padding-top: 16px;
-      border-top: 1px solid #e5e7eb;
-    }
-    .demo-flow h3 {
-      margin: 0 0 8px;
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: #6b7280;
-    }
-    .demo-flow ol {
-      margin: 0;
-      padding-left: 20px;
-      font-size: 13px;
-      line-height: 1.5;
-      color: #374151;
-    }
-    .demo-flow li { margin-bottom: 6px; }
     .next-steps {
       display: none;
       margin-top: 14px;
@@ -238,12 +196,11 @@ export function renderSignupPage() {
 
       <div class="status" id="status" role="status"></div>
       <div class="next-steps" id="next-steps">
-        <strong>Account ready — next steps for your demo</strong>
+        <strong>Account ready — next steps</strong>
         <ol>
-          <li>Install the Chrome extension (panel on the right →)</li>
-          <li>Click the NINK icon → sign in with this email and password</li>
-          <li>Open ChatGPT → <strong>Sign Off</strong> → save your <code>.nink</code> file</li>
-          <li>Share the <code>.nink</code> with a second user to test access requests</li>
+          <li><a href="${installUrl}">Install the Chrome extension</a> (one copy command)</li>
+          <li>Sign in from the NINK icon with this email and password</li>
+          <li>Sign off a ChatGPT session → share the <code>.nink</code> file with your demo partner</li>
         </ol>
       </div>
       <p class="footer">Already have an account? Sign in via the extension popup after installing.</p>
@@ -254,22 +211,18 @@ export function renderSignupPage() {
         ${CHROME_LOGO_SVG}
         Install Chrome extension
       </h2>
-      <p>Required to sign off AI chats, view evidence packages, and request access from owners.</p>
+      <p>Extension files are hosted on <strong>ni.nink.com</strong> — no GitHub zip. Run one install command to copy them locally, then Load unpacked in Chrome.</p>
       ${storeLink}
-      <a class="install-btn${chromeWebStore ? "" : " install-btn-primary"}" href="chrome://extensions/" id="chrome-extensions-link">
+      <a class="install-btn" href="${installUrl}">
         ${CHROME_LOGO_SVG}
-        <span>Open chrome://extensions</span>
+        <span>Install instructions</span>
       </a>
-      ${developerInstall}
-      <div class="demo-flow">
-        <h3>Full demo flow (two laptops)</h3>
-        <ol>
-          <li><strong>Alice</strong> — create account here → install extension → sign in → sign off ChatGPT session</li>
-          <li><strong>Bob</strong> — create account → install extension → sign in → load Alice’s <code>.nink</code></li>
-          <li>Bob clicks <strong>Ask owner</strong> → Alice approves by email → Bob pays 10 credits to view</li>
-        </ol>
-        <p class="hint" style="margin-top:10px">Extension source: <a href="${githubRepo}" target="_blank" rel="noopener noreferrer">GitHub</a> · API: <a href="${publicBase}">${publicBase}</a></p>
-      </div>
+      <ol class="install-steps">
+        <li>Open <a href="${installUrl}">ni.nink.com/extension/install</a></li>
+        <li>Copy the Windows or Mac install command (downloads <code>~/nink-extension</code>)</li>
+        <li><a href="chrome://extensions/">chrome://extensions</a> → Developer mode → <strong>Load unpacked</strong></li>
+      </ol>
+      <p style="font-size:12px;color:#6b7280;margin-top:14px">Files: <a href="${publicBase}/extension/manifest.json">/extension/manifest.json</a></p>
     </aside>
   </div>
 
@@ -283,14 +236,6 @@ export function renderSignupPage() {
     const confirmEl = document.getElementById("confirm");
     const sendCodeBtn = document.getElementById("send-code-btn");
     const createBtn = document.getElementById("create-btn");
-    const chromeExtensionsLink = document.getElementById("chrome-extensions-link");
-
-    if (chromeExtensionsLink) {
-      chromeExtensionsLink.addEventListener("click", (event) => {
-        event.preventDefault();
-        window.location.href = "chrome://extensions/";
-      });
-    }
 
     function showStatus(kind, message) {
       statusEl.className = "status show " + kind;

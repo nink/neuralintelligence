@@ -42,6 +42,8 @@ import {
 } from "./packageAccessStore.mjs";
 import { AccessRequestError } from "./packageErrors.mjs";
 import { renderAccessRequestResultPage } from "./accessRequestPage.mjs";
+import { renderExtensionInstallPage } from "./extensionInstallPage.mjs";
+import { tryServeExtensionFile } from "./extensionStatic.mjs";
 
 function useSupabaseStore() {
   return String(process.env.NINK_STORE || "json").toLowerCase() === "supabase";
@@ -297,7 +299,7 @@ export async function handleApiRequest(req, res) {
     sendJson(res, 200, {
       status: "ok",
       service: "nink-api",
-      docs: "GET /health · GET /signup · GET /access-request/respond · POST /v1/packages/request-access · GET /v1/packages/access-status · POST /v1/auth/signup/send-code · POST /v1/auth/signup/complete · POST /v1/auth/login · GET /v1/accounting/parameters · POST /v1/blockchain/anchor",
+      docs: "GET /health · GET /signup · GET /extension/install · GET /extension/* · GET /access-request/respond · POST /v1/packages/request-access · GET /v1/packages/access-status · POST /v1/auth/signup/send-code · POST /v1/auth/signup/complete · POST /v1/auth/login · GET /v1/accounting/parameters · POST /v1/blockchain/anchor",
     });
     return;
   }
@@ -305,6 +307,32 @@ export async function handleApiRequest(req, res) {
   if (method === "GET" && pathname === "/signup") {
     sendHtml(res, 200, renderSignupPage());
     return;
+  }
+
+  if (method === "GET" && pathname === "/extension/install") {
+    sendHtml(res, 200, renderExtensionInstallPage());
+    return;
+  }
+
+  if (method === "GET" && pathname.startsWith("/extension/")) {
+    const file = tryServeExtensionFile(pathname);
+    if (file) {
+      const headers = {
+        "Content-Type": file.contentType,
+        "Cache-Control": "public, max-age=300",
+      };
+      if (typeof res.status === "function") {
+        res.status(200);
+        for (const [key, value] of Object.entries(headers)) {
+          res.setHeader(key, value);
+        }
+        res.send(file.body);
+      } else {
+        res.writeHead(200, headers);
+        res.end(file.body);
+      }
+      return;
+    }
   }
 
   if (method === "GET" && pathname === "/access-request/respond") {
