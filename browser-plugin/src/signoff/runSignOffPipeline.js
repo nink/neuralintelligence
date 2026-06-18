@@ -1,4 +1,4 @@
-import { hasSufficientBalance, formatTokenForDisplay } from "../utils/tokenMath.js";
+import { hasSufficientBalance, formatCreditsForDisplay } from "../utils/tokenMath.js";
 import {
   encryptManifest,
   computeStateHash,
@@ -21,7 +21,7 @@ import {
 import { NINK_CHAIN_CONFIG } from "../config/chainConfig.js";
 import { DEFAULT_NINK_CONFIG } from "../config/ninkConfig.js";
 import { getOnChainWalletSnapshot, readChainHealth } from "../utils/tokenBalance.js";
-import { applyBalanceAfterAnchor, anchorOnCloudApi } from "../utils/accountingApi.js";
+import { applyBalanceAfterAnchor, anchorOnCloudApi, uploadCloudPackage } from "../utils/accountingApi.js";
 
 function readLocalStorage(keys) {
   return new Promise((resolve, reject) => {
@@ -369,7 +369,7 @@ export async function validateSignOffReady(useDevStubs, chatTabId) {
     }
     if (!hasSufficientBalance(accounting.userBalance, accounting.requiredFee)) {
       throw new Error(
-        `Insufficient funds. Required: ${formatTokenForDisplay(accounting.requiredFee)}, Available: ${formatTokenForDisplay(accounting.userBalance)}`
+        `Insufficient credits. Required: ${formatCreditsForDisplay(accounting.requiredFee)}, Available: ${formatCreditsForDisplay(accounting.userBalance)}`
       );
     }
     return { tab, connectedAddress: null, useWalletMode: false };
@@ -409,7 +409,7 @@ export async function validateSignOffReady(useDevStubs, chatTabId) {
 
   if (!hasSufficientBalance(accounting.userBalance, accounting.requiredFee)) {
     throw new Error(
-      `Insufficient NINK. Required: ${formatTokenForDisplay(accounting.requiredFee)}, Available: ${formatTokenForDisplay(accounting.userBalance)}`
+      `Insufficient credits. Required: ${formatCreditsForDisplay(accounting.requiredFee)}, Available: ${formatCreditsForDisplay(accounting.userBalance)}`
     );
   }
 
@@ -496,6 +496,13 @@ export async function executeSignOff(useDevStubs, chatTabId, onStatus) {
     anchorProofLocation: "outer-envelope",
   };
 
+  if (!useDevStubs && !useWalletMode && stored.ninkSession) {
+    sessionData.signOffContext.accountEmail = stored.ninkSession.email || null;
+    sessionData.signOffContext.accountDisplayName = stored.ninkSession.displayName || null;
+    sessionData.signOffContext.accountUserId = stored.ninkSession.userId || null;
+    sessionData.signOffContext.identityProofType = "nink-cloud-account";
+  }
+
   onStatus?.("Encrypting session payload…");
 
   const localKey = await generateLocalKey();
@@ -567,12 +574,14 @@ export async function executeSignOff(useDevStubs, chatTabId, onStatus) {
       txHash: receipt.txHash,
       blockNumber: receipt.blockNumber ?? null,
       registryAddress: NINK_CHAIN_CONFIG.registryAddress || null,
-      validatorAddress: stored.ninkSession?.userId || "nink-account",
+      validatorAddress: stored.ninkSession?.userId
+        ? `nink-cloud:${String(stored.ninkSession.userId).slice(0, 8)}`
+        : "nink-cloud-account",
       chainId: NINK_CHAIN_CONFIG.chainId ?? null,
       source: receipt.source || "nink-cloud-relayer",
       isLocalDevMode: false,
     };
-    sessionData.signOffContext.identityProofAddress = stored.ninkSession?.userId || "nink-account";
+    sessionData.signOffContext.identityProofAddress = chainReceipt.validatorAddress;
     sessionData.signOffContext.anchorMethod = receipt.source || "nink-cloud-relayer";
     sessionData.signOffContext.onChainTransactionHash = receipt.txHash;
     sessionData.signOffContext.registryAddress = NINK_CHAIN_CONFIG.registryAddress || null;
@@ -618,6 +627,26 @@ export async function executeSignOff(useDevStubs, chatTabId, onStatus) {
       document.captureStatus === "success" || document.captureStatus === "metadata-only"
   ).length;
 
+  let packageId = null;
+  if (!useDevStubs && !useWalletMode && stored.ninkSession?.sessionToken) {
+    try {
+      onStatus?.("Registering package for secure viewing…");
+      const packageTitle =
+        sessionData.auditRecord?.sessionContext?.sessionTitle ||
+        sessionData.captureTab?.title ||
+        `NINK session ${anchoredAt}`;
+      packageId = await uploadCloudPackage(
+        ninkConfig,
+        stored.ninkSession,
+        sessionData,
+        stateHash,
+        packageTitle
+      );
+    } catch (uploadError) {
+      console.warn("Cloud package registration failed:", uploadError);
+    }
+  }
+
   return {
     completedPackage: {
       version: `NINK-V${chrome.runtime.getManifest().version}`,
@@ -636,6 +665,7 @@ export async function executeSignOff(useDevStubs, chatTabId, onStatus) {
       blockNumber: chainReceipt.blockNumber ?? null,
       transactionHash: chainReceipt.txHash,
       stateHash,
+      packageId,
       payloadCompression: "gzip",
       encryptedPayload,
     },

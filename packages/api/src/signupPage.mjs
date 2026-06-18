@@ -74,7 +74,7 @@ export function renderSignupPage() {
 <body>
   <main class="card">
     <h1 class="brand">NINK</h1>
-    <p class="subtitle">Create your account to get <strong>5.00 virtual NINK</strong> and sign off AI sessions with the browser extension.</p>
+    <p class="subtitle">Create your account to get <strong>500 credits</strong> (5.00 NINK) and sign off AI sessions with the browser extension.</p>
 
     <form id="signup-form" novalidate>
       <label for="email">Email</label>
@@ -218,7 +218,7 @@ export function renderSignupPage() {
         }
         showStatus(
           "success",
-          "Account created with 5.00 NINK. Open the NINK browser extension and sign in with your email and password."
+          "Account created with 500 credits. Open the NINK browser extension and sign in with your email and password."
         );
         document.getElementById("signup-form").reset();
         step2.classList.remove("show");

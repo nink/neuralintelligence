@@ -19,7 +19,7 @@ export function signupBonusWei() {
 export function mapUserRow(row, balanceWei) {
   return {
     id: row.id,
-    userId: row.email,
+    userId: row.id,
     email: row.email,
     displayName: row.display_name,
     balanceWei: String(balanceWei ?? "0"),

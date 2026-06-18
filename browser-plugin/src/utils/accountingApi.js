@@ -132,6 +132,33 @@ export async function anchorOnCloudApi(config, session, stateHash, appliedFee) {
   return payload;
 }
 
+export async function uploadCloudPackage(config, session, payload, stateHash, title) {
+  if (!session?.sessionToken) {
+    throw new Error("Session expired.");
+  }
+
+  const apiBase = resolveApiBaseUrl({ ...DEFAULT_NINK_CONFIG, ...config });
+  const response = await fetch(`${apiBase}/v1/packages/create`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.sessionToken}`,
+    },
+    body: JSON.stringify({
+      title,
+      payload,
+      stateHash,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.status === "ERROR") {
+    throw new Error(data.message || `Package create returned ${response.status}`);
+  }
+
+  return data.packageId;
+}
+
 export async function syncCloudAccountingAfterAnchor(config, session, requiredFee) {
   const accounting = await fetchCloudAccountingParameters(config, session);
   return applyBalanceAfterAnchor(accounting.userBalance, requiredFee);

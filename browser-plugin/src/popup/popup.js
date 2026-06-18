@@ -1,4 +1,4 @@
-import { hasSufficientBalance, formatTokenForDisplay } from "../utils/tokenMath.js";
+import { hasSufficientBalance, formatCreditsForDisplay } from "../utils/tokenMath.js";
 import { LOCAL_DEV_ACCOUNTING } from "../utils/devStubs.js";
 import { isSupportedChatUrl } from "../config/chatPlatforms.js";
 import { resolveChatTabForSignOff, ensureScraperReadyOnTab } from "../utils/chatTab.js";
@@ -207,8 +207,8 @@ async function refreshAccountPanel() {
     return;
   }
 
-  balanceEl.textContent = `${formatTokenForDisplay(accounting.userBalance)} NINK`;
-  feeEl.textContent = formatTokenForDisplay(accounting.requiredFee);
+  balanceEl.textContent = formatCreditsForDisplay(accounting.userBalance);
+  feeEl.textContent = formatCreditsForDisplay(accounting.requiredFee);
   sourceLabel.textContent = isCloudAccounting(accounting)
     ? `Balance from your NINK account (${apiBase}).`
     : accountingError || "Could not verify balance — try signing out and in again.";
@@ -380,10 +380,10 @@ async function updateUI() {
 
     if (useDevStubs) {
       if (accounting) {
-        document.getElementById("balance-display").innerText = formatTokenForDisplay(
+        document.getElementById("balance-display").innerText = formatCreditsForDisplay(
           accounting.userBalance
         );
-        document.getElementById("fee-display").innerText = formatTokenForDisplay(
+        document.getElementById("fee-display").innerText = formatCreditsForDisplay(
           accounting.requiredFee
         );
       }

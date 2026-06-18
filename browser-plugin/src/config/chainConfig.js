@@ -5,7 +5,7 @@ export const NINK_CHAIN_CONFIG = {
   registryAddress: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
   treasury: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   deployer: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-  anchorFeeWei: "10000000000000000",
+  anchorFeeWei: "100000000000000000",
   deployedAt: "2026-06-16T16:47:35.085Z",
 };
 

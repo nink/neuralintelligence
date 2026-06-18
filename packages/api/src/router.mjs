@@ -1,4 +1,5 @@
 import { ANCHOR_FEE_WEI } from "./constants.mjs";
+import { weiToCredits, PACKAGE_FEES } from "./credits.mjs";
 import { InvalidCredentialsError, PasswordValidationError } from "./password.mjs";
 import {
   anchorForUser,
@@ -26,6 +27,14 @@ import {
   supabaseHealthCheck,
 } from "./supabaseStore.mjs";
 import { anchorStateOnChain, warmRelayer } from "./relayer.mjs";
+import {
+  createEvidencePackage,
+  downloadEvidenceReport,
+  InsufficientBalanceError,
+  PackageAccessError,
+  verifyEvidencePackage,
+  viewEvidencePackage,
+} from "./packagesStore.mjs";
 
 function useSupabaseStore() {
   return String(process.env.NINK_STORE || "json").toLowerCase() === "supabase";
@@ -143,19 +152,40 @@ function corsHeaders() {
   };
 }
 
-export function sendJson(res, statusCode, payload) {
+export function sendJson(res, statusCode, payload, extraHeaders = {}) {
   const body = JSON.stringify(payload);
+  const headers = { ...corsHeaders(), ...extraHeaders };
   if (typeof res.status === "function") {
     res.status(statusCode);
-    for (const [key, value] of Object.entries(corsHeaders())) {
+    for (const [key, value] of Object.entries(headers)) {
       res.setHeader(key, value);
     }
     res.send(body);
     return;
   }
 
-  res.writeHead(statusCode, corsHeaders());
+  res.writeHead(statusCode, headers);
   res.end(body);
+}
+
+function privateResponseHeaders() {
+  return {
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+    Pragma: "no-cache",
+  };
+}
+
+function accountingPayload(user) {
+  return {
+    balance: user.balanceWei,
+    balanceCredits: weiToCredits(user.balanceWei),
+    feeRequirement: ANCHOR_FEE_WEI,
+    feeCredits: weiToCredits(ANCHOR_FEE_WEI),
+    packageFees: PACKAGE_FEES,
+    source: "nink-cloud-api",
+    userId: user.userId,
+    rail: user.rail || "closed_loop",
+  };
 }
 
 function htmlHeaders() {
@@ -322,7 +352,9 @@ export async function handleApiRequest(req, res) {
         sessionToken: result.sessionToken,
         expiresAt: result.expiresAt,
         balance: result.balance,
+        balanceCredits: weiToCredits(result.balance),
         feeRequirement: result.feeRequirement,
+        feeCredits: weiToCredits(result.feeRequirement),
         signupBonusWei: result.signupBonusWei,
       });
     } catch (error) {
@@ -366,7 +398,9 @@ export async function handleApiRequest(req, res) {
         sessionToken,
         expiresAt,
         balance: user.balanceWei,
+        balanceCredits: weiToCredits(user.balanceWei),
         feeRequirement: ANCHOR_FEE_WEI,
+        feeCredits: weiToCredits(ANCHOR_FEE_WEI),
       });
     } catch (error) {
       if (error instanceof InvalidCredentialsError) {
@@ -385,13 +419,132 @@ export async function handleApiRequest(req, res) {
       return;
     }
 
-    sendJson(res, 200, {
-      balance: user.balanceWei,
-      feeRequirement: ANCHOR_FEE_WEI,
-      source: "nink-cloud-api",
-      userId: user.userId,
-      rail: user.rail || "closed_loop",
-    });
+    sendJson(res, 200, accountingPayload(user));
+    return;
+  }
+
+  if (method === "POST" && pathname === "/v1/packages/create") {
+    if (!useSupabaseStore()) {
+      sendJson(res, 501, { status: "ERROR", message: "Packages require NINK_STORE=supabase." });
+      return;
+    }
+
+    try {
+      const user = await resolveUser(adapter, req);
+      if (!user) {
+        sendJson(res, 401, { status: "ERROR", message: "Sign in required." });
+        return;
+      }
+
+      const body = await readJsonBody(req);
+      const result = await createEvidencePackage(user, {
+        title: body.title,
+        payload: body.payload,
+        stateHash: body.stateHash,
+      });
+
+      sendJson(res, 200, { status: "SUCCESS", ...result });
+    } catch (error) {
+      sendJson(res, 400, { status: "ERROR", message: error.message });
+    }
+    return;
+  }
+
+  if (method === "POST" && pathname === "/v1/packages/view") {
+    if (!useSupabaseStore()) {
+      sendJson(res, 501, { status: "ERROR", message: "Packages require NINK_STORE=supabase." });
+      return;
+    }
+
+    try {
+      const user = await resolveUser(adapter, req);
+      if (!user) {
+        sendJson(res, 401, { status: "ERROR", message: "Sign in required." });
+        return;
+      }
+
+      const body = await readJsonBody(req);
+      const result = await viewEvidencePackage(user, body.packageId || body.package_id);
+      sendJson(
+        res,
+        200,
+        {
+          status: "SUCCESS",
+          ...result,
+        },
+        privateResponseHeaders()
+      );
+    } catch (error) {
+      if (error instanceof InsufficientBalanceError) {
+        sendJson(res, 402, { status: "ERROR", message: error.message });
+        return;
+      }
+      if (error instanceof PackageAccessError) {
+        sendJson(res, 403, { status: "ERROR", message: error.message });
+        return;
+      }
+      sendJson(res, 400, { status: "ERROR", message: error.message });
+    }
+    return;
+  }
+
+  if (method === "POST" && pathname === "/v1/packages/verify") {
+    if (!useSupabaseStore()) {
+      sendJson(res, 501, { status: "ERROR", message: "Packages require NINK_STORE=supabase." });
+      return;
+    }
+
+    try {
+      const user = await resolveUser(adapter, req);
+      if (!user) {
+        sendJson(res, 401, { status: "ERROR", message: "Sign in required." });
+        return;
+      }
+
+      const body = await readJsonBody(req);
+      const result = await verifyEvidencePackage(user, body.packageId || body.package_id);
+      sendJson(res, 200, { status: "SUCCESS", ...result });
+    } catch (error) {
+      if (error instanceof InsufficientBalanceError) {
+        sendJson(res, 402, { status: "ERROR", message: error.message });
+        return;
+      }
+      if (error instanceof PackageAccessError) {
+        sendJson(res, 403, { status: "ERROR", message: error.message });
+        return;
+      }
+      sendJson(res, 400, { status: "ERROR", message: error.message });
+    }
+    return;
+  }
+
+  if (method === "POST" && pathname === "/v1/packages/download-report") {
+    if (!useSupabaseStore()) {
+      sendJson(res, 501, { status: "ERROR", message: "Packages require NINK_STORE=supabase." });
+      return;
+    }
+
+    try {
+      const user = await resolveUser(adapter, req);
+      if (!user) {
+        sendJson(res, 401, { status: "ERROR", message: "Sign in required." });
+        return;
+      }
+
+      const body = await readJsonBody(req);
+      const result = await downloadEvidenceReport(user, body.packageId || body.package_id);
+      sendJson(res, 200, { status: "SUCCESS", ...result }, privateResponseHeaders());
+    } catch (error) {
+      if (error instanceof InsufficientBalanceError) {
+        sendJson(res, 402, { status: "ERROR", message: error.message });
+        return;
+      }
+      if (error instanceof PackageAccessError) {
+        sendJson(res, 403, { status: "ERROR", message: error.message });
+        return;
+      }
+      sendJson(res, 400, { status: "ERROR", message: error.message });
+    }
     return;
   }
 

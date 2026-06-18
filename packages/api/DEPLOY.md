@@ -31,6 +31,7 @@ I **cannot** log into your Supabase or Vercel accounts. You add secrets in dashb
    - [`002_signup_bonus_5_nink.sql`](../../supabase/migrations/002_signup_bonus_5_nink.sql) (if not already applied)
    - [`003_app_user_password.sql`](../../supabase/migrations/003_app_user_password.sql)
    - [`004_signup_verifications.sql`](../../supabase/migrations/004_signup_verifications.sql) — email codes for `/signup`
+   - [`005_evidence_packages_and_credits.sql`](../../supabase/migrations/005_evidence_packages_and_credits.sql) — encrypted packages + credit debits
 
 ---
 
@@ -82,12 +83,15 @@ SUPABASE_URL=https://gggceicesawwbvmkioig.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<from Supabase dashboard>
 NINK_STORE=supabase
 NINK_RAIL_MODE=virtual
-NINK_ANCHOR_FEE_WEI=10000000000000000
+NINK_ANCHOR_FEE_WEI=100000000000000000
 NINK_SIGNUP_BONUS_WEI=5000000000000000000
 RESEND_API_KEY=<from Resend dashboard>
 RESEND_FROM_EMAIL=NINK <hello@nink.com>
 NINK_PUBLIC_BASE_URL=https://ni.nink.com
+NINK_PACKAGE_MASTER_KEY=<32-byte key, base64 or hex>
 ```
+
+Display: **1 NINK = 100 credits** (0.01 NINK per credit). Sign-off costs **10 credits** (0.10 NINK). Signup bonus **500 credits** (5.00 NINK).
 
 Signup page: **https://ni.nink.com/signup** (email verification via Resend, then password creation).
 

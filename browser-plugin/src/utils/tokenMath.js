@@ -1,4 +1,9 @@
 export const TOKEN_DECIMALS = 18;
+export const TOKEN_DECIMALS_BI = 18n;
+export const TOKEN_SCALE = 10n ** TOKEN_DECIMALS_BI;
+/** 1 credit = 0.01 NINK. Display layer only — balances stay in wei internally. */
+export const CREDIT_WEI = 10n ** 16n;
+export const CREDITS_PER_NINK = 100n;
 
 export function parseTokenAmount(value) {
   const normalized = String(value ?? "0").trim();
@@ -20,6 +25,19 @@ export function parseTokenAmount(value) {
   }
 
   return null;
+}
+
+export function weiToCredits(wei) {
+  const units = parseTokenAmount(wei);
+  if (units === null) {
+    return 0;
+  }
+  return Number(units / CREDIT_WEI);
+}
+
+export function formatCreditsForDisplay(wei) {
+  const credits = weiToCredits(wei);
+  return `${credits} credits`;
 }
 
 export function compareTokenAmounts(left, right) {
